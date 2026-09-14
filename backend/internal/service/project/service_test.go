@@ -1347,6 +1347,32 @@ func TestManager_AddPopulatesRepoOriginURL(t *testing.T) {
 	}
 }
 
+// A url.<base>.insteadOf rewrite that carries a credential is an ordinary thing
+// to have configured, on CI machines especially. Add must record the remote the
+// user configured rather than the rewritten form, because this value is stored
+// on the project row and served to clients: resolving the rewrite here would
+// persist the user's token.
+func TestManager_AddStoresConfiguredOriginNotCredentialRewrite(t *testing.T) {
+	ctx := context.Background()
+	dir := gitRepoWithOrigin(t, "https://github.com/o/r.git")
+	if out, err := exec.Command("git", "-C", dir, "config", "--local",
+		"url.https://x-access-token:secret-token@github.com/.insteadOf",
+		"https://github.com/").CombinedOutput(); err != nil {
+		t.Fatalf("git config insteadOf: %v (%s)", err, out)
+	}
+
+	proj, err := newManager(t).Add(ctx, project.AddInput{Path: dir, ProjectID: ptr("p")})
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if proj.Repo != "https://github.com/o/r.git" {
+		t.Fatalf("Repo = %q, want the configured origin https://github.com/o/r.git", proj.Repo)
+	}
+	if strings.Contains(proj.Repo, "secret-token") {
+		t.Fatalf("Repo leaked a credential from the insteadOf rewrite: %q", proj.Repo)
+	}
+}
+
 func TestManager_GetUpdateRemoveErrors(t *testing.T) {
 	ctx := context.Background()
 	m := newManager(t)

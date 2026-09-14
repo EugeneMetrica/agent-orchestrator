@@ -177,12 +177,14 @@ func quote(s string) string {
 }
 
 // defaultRepoOriginURL resolves a repo's git origin URL, "" when the repo is
-// absent or has no origin. Matches the rewrite's resolveGitOriginURL.
+// absent or has no origin. Matches the rewrite's resolveGitOriginURL, including
+// reading the configured value so an insteadOf rewrite cannot import a
+// credential-bearing URL.
 func defaultRepoOriginURL(path string) string {
 	if path == "" {
 		return ""
 	}
-	cmd := aoprocess.Command("git", "-C", path, "remote", "get-url", "origin")
+	cmd := aoprocess.Command("git", "-C", path, "config", "--get", "remote.origin.url")
 	out, err := cmd.Output()
 	if err != nil {
 		return ""

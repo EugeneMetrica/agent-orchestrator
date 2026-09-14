@@ -709,12 +709,19 @@ func validateScratchProjectConfig(cfg domain.ProjectConfig) error {
 	return nil
 }
 
-// resolveGitOriginURL returns the project's `origin` remote URL via
-// `git -C path remote get-url origin`. A missing remote, missing repo, or any
-// other git error returns an empty string — `project add` must not fail just
-// because no origin is configured (the SCM observer skips such projects).
+// resolveGitOriginURL returns the project's configured `origin` remote URL.
+//
+// It reads remote.origin.url rather than running `git remote get-url`, because
+// get-url applies url.<base>.insteadOf rewrites. Those rewrites routinely
+// substitute a credential-bearing URL, and this value is persisted on the
+// project row and served to clients, so a rewrite would write a user's token
+// into AO's database. AO stores the remote the user configured.
+//
+// A missing remote, missing repo, or any other git error returns an empty
+// string — `project add` must not fail just because no origin is configured
+// (the SCM observer skips such projects).
 func resolveGitOriginURL(path string) string {
-	out, err := aoprocess.Command("git", "-C", path, "remote", "get-url", "origin").Output()
+	out, err := aoprocess.Command("git", "-C", path, "config", "--get", "remote.origin.url").Output()
 	if err != nil {
 		return ""
 	}

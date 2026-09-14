@@ -744,7 +744,10 @@ func TestPrepareGitGitHubRepositoryRepairsExistingOriginWithoutURL(t *testing.T)
 	if !reflect.DeepEqual(gitCalls, wantGitCalls) {
 		t.Fatalf("git calls = %#v, want %#v", gitCalls, wantGitCalls)
 	}
-	if out, err := exec.Command("git", "-C", repo, "remote", "get-url", "origin").CombinedOutput(); err != nil || string(out) != "https://github.com/octo/repaired.git\n" {
+	// Read the configured value, not `git remote get-url`: get-url resolves
+	// url.<base>.insteadOf, so an ambient credential rewrite for github.com would
+	// answer with a token-bearing URL the importer never wrote.
+	if out, err := exec.Command("git", "-C", repo, "config", "--get", "remote.origin.url").CombinedOutput(); err != nil || string(out) != "https://github.com/octo/repaired.git\n" {
 		t.Fatalf("origin = %q, %v", out, err)
 	}
 }

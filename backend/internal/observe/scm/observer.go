@@ -2160,21 +2160,30 @@ func normalizePRState(draft, merged, closed bool) string {
 	}
 }
 
-// resolveGitOriginURL runs `git -C path remote get-url origin` and returns the
-// trimmed URL, or "" if the command fails (missing repo, no origin remote, etc).
-// The observer uses this to backfill projects that were registered before
-// project.Add resolved origin URLs at add time.
+// resolveGitOriginURL returns the configured remote.origin.url at path, or ""
+// if the command fails (missing repo, no origin remote, etc). The observer uses
+// this to backfill projects that were registered before project.Add resolved
+// origin URLs at add time.
+//
+// It reads the configured value rather than running `git remote get-url`, which
+// applies url.<base>.insteadOf rewrites: the backfill persists this URL on the
+// project row, so a credential-bearing rewrite would write a user's token into
+// AO's database.
 func resolveGitOriginURL(path string) string {
-	out, err := aoprocess.Command("git", "-C", path, "remote", "get-url", "origin").Output()
+	out, err := aoprocess.Command("git", "-C", path, "config", "--get", "remote.origin.url").Output()
 	if err != nil {
 		return ""
 	}
 	return strings.TrimSpace(string(out))
 }
 
-// gitRemoteURLs lists the fetch URL of every git remote configured at path. It
+// gitRemoteURLs lists the configured URL of every git remote at path. It
 // returns nil on any error (missing repo, no git, no remotes). The observer uses
 // it to scan upstream/mirror remotes for cross-fork PRs in addition to origin.
+//
+// As with resolveGitOriginURL, these are the configured values rather than
+// `git remote get-url` output, so an insteadOf rewrite cannot pull a credential
+// into the URLs the observer matches and logs.
 func gitRemoteURLs(path string) []string {
 	out, err := aoprocess.Command("git", "-C", path, "remote").Output()
 	if err != nil {
@@ -2182,7 +2191,7 @@ func gitRemoteURLs(path string) []string {
 	}
 	var urls []string
 	for _, name := range strings.Fields(string(out)) {
-		u, err := aoprocess.Command("git", "-C", path, "remote", "get-url", name).Output()
+		u, err := aoprocess.Command("git", "-C", path, "config", "--get", "remote."+name+".url").Output()
 		if err != nil {
 			continue
 		}
