@@ -11,8 +11,8 @@ No live integration; gates all subsequent phases.
 
 **File**: `backend/internal/adapters/chatdriver/grokacp/driver.go`
 
-Create the package with `New()`, `configure()`, `sessionMode()`, `sessionOptions()`,
-and `validateTurnSettings()` functions as specified in design.md.
+Create the package with `New()`, `configure()`, `sessionMode()`, and
+`sessionOptions()` functions as specified in design.md.
 
 **Verification**:
 ```bash
@@ -30,18 +30,19 @@ Tests to implement:
 | Test | Assertion |
 |------|-----------|
 | `TestHarness` | `driver.Harness() == domain.HarnessGrok` |
-| `TestConfigure_DefaultPermissions` | Args: `["agent", "--no-auto-update", "stdio"]` |
+| `TestConfigure_DefaultPermissions` | Args: `["--no-auto-update", "agent", "stdio"]` |
 | `TestConfigure_BypassPermissions` | Args include `--always-approve` |
 | `TestConfigure_AcceptEdits` | Args do NOT include `--always-approve` |
 | `TestConfigure_Auto` | Args do NOT include `--always-approve` |
-| `TestConfigure_ModelOverride` | Args include `["--model", "xai/grok-3"]` |
+| `TestConfigure_ModelOverride` | Args include `["--model", "grok-code-fast"]` |
 | `TestSessionMode_Default` | Returns `""` |
 | `TestSessionMode_AcceptEdits` | Returns `"acceptEdits"` |
 | `TestSessionMode_Auto` | Returns `"auto"` |
 | `TestSessionMode_BypassPermissions` | Returns `"bypassPermissions"` |
-| `TestValidateTurnSettings_ValidModel` | `"xai/grok-3"` → no error |
-| `TestValidateTurnSettings_InvalidModel` | `"grok-3"` → `ErrChatConfigOptionInvalid` |
-| `TestValidateTurnSettings_EmptyModel` | `""` → no error |
+| `TestSessionOptions_BareModel` | `"grok-code-fast"` → one `model` option, id unchanged |
+| `TestSessionOptions_QualifiedModel` | `"xai/grok-code-fast-1"` → id unchanged |
+| `TestSessionOptions_EmptyModel` | `""` → no options |
+| `TestBareModelReachesLaunch` | Start/Resume with `"grok-code-fast"` is not rejected by AO |
 
 **Verification**:
 ```bash
@@ -110,7 +111,7 @@ go test -race ./...
 - [ ] `go vet ./...` passes
 - [ ] `go test ./...` passes
 - [ ] `go test -race ./...` passes
-- [ ] `golangci-lint run` passes (v2.12.2)
+- [ ] `golangci-lint run` passes (v2.13.2)
 - [ ] `npm run lint` passes
 
 ### G3: Live Mini-Task (WAIVED)

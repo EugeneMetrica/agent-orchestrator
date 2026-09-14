@@ -55,22 +55,23 @@ import (
 // Grok agent plugin. AO adds only per-session permission mode and model override.
 func New(plugin nativeacp.Plugin, log *slog.Logger) ports.ChatDriver {
     return nativeacp.New(plugin, nativeacp.Config{
-        Harness:              domain.HarnessGrok,
-        Configure:            configure,
-        SessionMode:          sessionMode,
-        SessionOptions:       sessionOptions,
-        ValidateTurnSettings: validateTurnSettings,
+        Harness:        domain.HarnessGrok,
+        Configure:      configure,
+        SessionMode:    sessionMode,
+        SessionOptions: sessionOptions,
     }, log)
 }
 ```
 
 ### configure Function
 
-Constructs spawn args for `grok agent [--always-approve] [--model M] [--no-auto-update] stdio`:
+Constructs spawn args for `grok --no-auto-update agent [--always-approve] [--model M] stdio`:
 
 ```go
 func configure(ctx context.Context, cfg acpdriver.LaunchConfig) ([]string, map[string]string, error) {
-    args := []string{"agent", "--no-auto-update"}
+    // --no-auto-update is a global flag, so it precedes the subcommand exactly
+    // as the TUI adapter passes it.
+    args := []string{"--no-auto-update", "agent"}
 
     // Bypass-permissions mode → --always-approve CLI flag
     if ports.NormalizePermissionMode(cfg.Permissions) == ports.PermissionModeBypassPermissions {
@@ -106,21 +107,18 @@ func sessionMode(permissions ports.PermissionMode) string {
 }
 ```
 
-### validateTurnSettings Function
+### Model IDs: no format validation
 
-Validates model format (must be `provider/model`):
+The binding installs no `ValidateTurnSettings` model gate. Grok model ids in the
+AO catalog and the TUI adapter are bare (`grok-code-fast`, `grok-4.5`), so a
+`provider/model` requirement would reject every real selection. The id is
+forwarded verbatim through `sessionOptions`, and the shared `acp` transport
+rejects ids the ACP session does not advertise:
 
 ```go
-func validateTurnSettings(_ ports.PermissionMode, settings ports.ChatTurnSettings) error {
-    if settings.Model == "" {
-        return nil
-    }
-    provider, model, found := strings.Cut(settings.Model, "/")
-    if !found || strings.TrimSpace(provider) == "" || strings.TrimSpace(model) == "" {
-        return fmt.Errorf("%w: Grok model %q must use provider/model format "+
-            "(for example, xai/grok-3); select a full model ID from `grok models`, "+
-            "or clear the model override to use Agent default",
-            ports.ErrChatConfigOptionInvalid, settings.Model)
+func sessionOptions(settings ports.ChatTurnSettings) []acpdriver.SessionOption {
+    if model := strings.TrimSpace(settings.Model); model != "" {
+        return []acpdriver.SessionOption{{ID: "model", Value: model}}
     }
     return nil
 }
@@ -164,13 +162,13 @@ Unit tests covering the Grok-specific binding only (not shared nativeacp logic):
 | Test | Coverage |
 |------|----------|
 | `TestHarness` | `driver.Harness() == domain.HarnessGrok` |
-| `TestConfigure_DefaultPermissions` | Returns `agent --no-auto-update stdio` |
+| `TestConfigure_DefaultPermissions` | Returns `--no-auto-update agent stdio` |
 | `TestConfigure_BypassPermissions` | Includes `--always-approve` |
-| `TestConfigure_ModelOverride` | Includes `--model xai/grok-3` |
+| `TestConfigure_ModelOverride` | Includes `--model grok-code-fast` |
 | `TestSessionMode_Mapping` | Each permission mode maps correctly |
-| `TestValidateTurnSettings_ValidModel` | `xai/grok-3` passes |
-| `TestValidateTurnSettings_InvalidModel` | `grok-3` fails with correct error |
-| `TestValidateTurnSettings_EmptyModel` | Empty string passes |
+| `TestSessionOptions_ModelForwarded` | Bare and qualified ids forward verbatim |
+| `TestSessionOptions_EmptyModel` | Empty/blank model yields no option |
+| `TestBareModelReachesLaunch` | `grok-code-fast` is not rejected by AO |
 
 ## Quality Gates
 
@@ -199,7 +197,7 @@ grok --no-auto-update [--permission-mode <mode>] [--model <model>] [--rules <tex
 
 Chat mode (new ACP):
 ```
-grok agent --no-auto-update [--always-approve] [--model <model>] stdio
+grok --no-auto-update agent [--always-approve] [--model <model>] stdio
 ```
 
 Key differences:

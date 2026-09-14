@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"reflect"
-	"strings"
 	"testing"
 
 	acpdriver "github.com/aoagents/agent-orchestrator/backend/internal/adapters/chatdriver/acp"
@@ -18,31 +17,41 @@ func TestConfigureSpawnsGrokACPStdio(t *testing.T) {
 		cfg  acpdriver.LaunchConfig
 		want []string
 	}{
-		{name: "defaults", want: []string{"agent", "--no-auto-update", "stdio"}},
+		{name: "defaults", want: []string{"--no-auto-update", "agent", "stdio"}},
 		{
 			name: "accept edits keeps the provider default flagless",
 			cfg:  acpdriver.LaunchConfig{Permissions: ports.PermissionModeAcceptEdits},
-			want: []string{"agent", "--no-auto-update", "stdio"},
+			want: []string{"--no-auto-update", "agent", "stdio"},
+		},
+		{
+			name: "auto keeps the provider default flagless",
+			cfg:  acpdriver.LaunchConfig{Permissions: ports.PermissionModeAuto},
+			want: []string{"--no-auto-update", "agent", "stdio"},
 		},
 		{
 			name: "bypass permissions always approves",
 			cfg:  acpdriver.LaunchConfig{Permissions: ports.PermissionModeBypassPermissions},
-			want: []string{"agent", "--no-auto-update", "--always-approve", "stdio"},
+			want: []string{"--no-auto-update", "agent", "--always-approve", "stdio"},
 		},
 		{
-			name: "model override",
+			name: "bare model override",
+			cfg:  acpdriver.LaunchConfig{Model: "grok-code-fast"},
+			want: []string{"--no-auto-update", "agent", "--model", "grok-code-fast", "stdio"},
+		},
+		{
+			name: "qualified model override",
 			cfg:  acpdriver.LaunchConfig{Model: "xai/grok-code-fast-1"},
-			want: []string{"agent", "--no-auto-update", "--model", "xai/grok-code-fast-1", "stdio"},
+			want: []string{"--no-auto-update", "agent", "--model", "xai/grok-code-fast-1", "stdio"},
 		},
 		{
 			name: "model override and bypass permissions",
-			cfg:  acpdriver.LaunchConfig{Model: "xai/grok-code-fast-1", Permissions: ports.PermissionModeBypassPermissions},
-			want: []string{"agent", "--no-auto-update", "--always-approve", "--model", "xai/grok-code-fast-1", "stdio"},
+			cfg:  acpdriver.LaunchConfig{Model: "grok-4.5", Permissions: ports.PermissionModeBypassPermissions},
+			want: []string{"--no-auto-update", "agent", "--always-approve", "--model", "grok-4.5", "stdio"},
 		},
 		{
 			name: "blank model is not forwarded",
 			cfg:  acpdriver.LaunchConfig{Model: "   "},
-			want: []string{"agent", "--no-auto-update", "stdio"},
+			want: []string{"--no-auto-update", "agent", "stdio"},
 		},
 	}
 	for _, tt := range tests {
@@ -93,34 +102,19 @@ func TestSessionOptionsUseAdvertisedModelOption(t *testing.T) {
 	if got := sessionOptions(ports.ChatTurnSettings{}); got != nil {
 		t.Fatalf("empty settings = %#v", got)
 	}
-	got := sessionOptions(ports.ChatTurnSettings{Model: "xai/grok-code-fast-1"})
-	want := []acpdriver.SessionOption{{ID: "model", Value: "xai/grok-code-fast-1"}}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("settings = %#v, want %#v", got, want)
+	for _, model := range []string{"grok-code-fast", "grok-4.5", "xai/grok-code-fast-1"} {
+		got := sessionOptions(ports.ChatTurnSettings{Model: model})
+		want := []acpdriver.SessionOption{{ID: "model", Value: model}}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("settings for %q = %#v, want %#v", model, got, want)
+		}
 	}
 }
 
-func TestValidateTurnSettingsModelFormat(t *testing.T) {
-	for _, model := range []string{"", "xai/grok-code-fast-1", "openrouter/x-ai/grok-4", "custom/private-model:latest"} {
-		t.Run("valid/"+model, func(t *testing.T) {
-			if err := validateTurnSettings(ports.PermissionModeDefault, ports.ChatTurnSettings{Model: model}); err != nil {
-				t.Fatal(err)
-			}
-		})
-	}
-	for _, model := range []string{"grok-4", " ", "/model", "provider/", " /model", "provider/ "} {
-		t.Run("invalid/"+model, func(t *testing.T) {
-			err := validateTurnSettings(ports.PermissionModeDefault, ports.ChatTurnSettings{Model: model})
-			if !errors.Is(err, ports.ErrChatConfigOptionInvalid) {
-				t.Fatalf("error = %v, want ErrChatConfigOptionInvalid", err)
-			}
-		})
-	}
-}
-
-// An invalid model must be refused before AO resolves or spawns the user's Grok
-// binary, so a typo cannot start a process that immediately fails.
-func TestRejectsBareModelNameBeforeResolvingBinary(t *testing.T) {
+// AO does not gate Grok model ids on a provider/model shape: the AO catalog and
+// the TUI adapter both use bare ids such as `grok-code-fast`. The id travels to
+// the launch, and the ACP session's advertised models decide availability.
+func TestBareModelNameReachesGrokLaunch(t *testing.T) {
 	for _, resume := range []bool{false, true} {
 		name := "start"
 		if resume {
@@ -133,16 +127,20 @@ func TestRejectsBareModelNameBeforeResolvingBinary(t *testing.T) {
 			var err error
 			if resume {
 				_, err = driver.Resume(context.Background(), ports.ChatResumeConfig{
-					WorkspacePath: workspace, Model: "grok-4", ProviderConversationID: "existing",
+					SessionID: "sess-grok", DataDir: t.TempDir(), WorkspacePath: workspace,
+					Model: "grok-code-fast", ProviderConversationID: "existing",
 				})
 			} else {
-				_, err = driver.Start(context.Background(), ports.ChatStartConfig{WorkspacePath: workspace, Model: "grok-4"})
+				_, err = driver.Start(context.Background(), ports.ChatStartConfig{
+					SessionID: "sess-grok", DataDir: t.TempDir(), WorkspacePath: workspace,
+					Model: "grok-code-fast",
+				})
 			}
-			if !errors.Is(err, ports.ErrChatConfigOptionInvalid) || !strings.Contains(err.Error(), "provider/model") {
-				t.Fatalf("error = %v, want model format validation with recovery guidance", err)
+			if errors.Is(err, ports.ErrChatConfigOptionInvalid) {
+				t.Fatalf("error = %v, want no model format gate", err)
 			}
-			if plugin.resolved {
-				t.Fatal("invalid model reached Grok binary resolution")
+			if !plugin.resolved {
+				t.Fatal("bare model id never reached Grok binary resolution")
 			}
 		})
 	}

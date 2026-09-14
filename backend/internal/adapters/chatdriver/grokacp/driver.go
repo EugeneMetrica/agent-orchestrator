@@ -4,7 +4,6 @@ package grokacp
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"strings"
 
@@ -14,26 +13,26 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
 )
 
-// New launches `grok agent … stdio` from the exact binary resolved by the
-// existing Grok agent plugin. Login, models, settings, and updates stay owned by
-// the user's Grok installation; AO adds only the launch-time permission mode and
-// model override.
+// New launches `grok --no-auto-update agent … stdio` from the exact binary
+// resolved by the existing Grok agent plugin. Login, models, settings, and
+// updates stay owned by the user's Grok installation; AO adds only the
+// launch-time permission mode and model override.
 func New(plugin nativeacp.Plugin, log *slog.Logger) ports.ChatDriver {
 	return nativeacp.New(plugin, nativeacp.Config{
-		Harness:              domain.HarnessGrok,
-		Configure:            configure,
-		SessionMode:          sessionMode,
-		SessionOptions:       sessionOptions,
-		ValidateTurnSettings: validateTurnSettings,
+		Harness:        domain.HarnessGrok,
+		Configure:      configure,
+		SessionMode:    sessionMode,
+		SessionOptions: sessionOptions,
 	}, log)
 }
 
-// configure builds `grok agent --no-auto-update [--always-approve]
+// configure builds `grok --no-auto-update agent [--always-approve]
 // [--model <model>] stdio`. The `agent` subcommand selects ACP mode and `stdio`
-// selects the JSON-RPC transport. `--no-auto-update` matches the TUI adapter so
-// an AO-managed session never self-updates mid-run.
+// selects the JSON-RPC transport. `--no-auto-update` is a global flag and keeps
+// the TUI adapter's position, so an AO-managed session never self-updates
+// mid-run.
 func configure(_ context.Context, cfg acpdriver.LaunchConfig) ([]string, map[string]string, error) {
-	args := []string{"agent", "--no-auto-update"}
+	args := []string{"--no-auto-update", "agent"}
 	if ports.NormalizePermissionMode(cfg.Permissions) == ports.PermissionModeBypassPermissions {
 		args = append(args, "--always-approve")
 	}
@@ -59,23 +58,13 @@ func sessionMode(permissions ports.PermissionMode) string {
 	}
 }
 
+// sessionOptions forwards the durable model choice verbatim, exactly as the TUI
+// adapter passes it to `grok --model`. Grok accepts bare ids such as
+// `grok-code-fast` alongside qualified ones, so AO does not impose a format;
+// availability is answered by the models the ACP session advertises.
 func sessionOptions(settings ports.ChatTurnSettings) []acpdriver.SessionOption {
 	if model := strings.TrimSpace(settings.Model); model != "" {
 		return []acpdriver.SessionOption{{ID: "model", Value: model}}
-	}
-	return nil
-}
-
-// Grok parses model overrides as provider/model. Reject a bare model name before
-// spawning so the user gets a recoverable message instead of a provider-side
-// launch failure. Model availability stays the user's Grok installation's answer.
-func validateTurnSettings(_ ports.PermissionMode, settings ports.ChatTurnSettings) error {
-	if settings.Model == "" {
-		return nil
-	}
-	provider, model, found := strings.Cut(settings.Model, "/")
-	if !found || strings.TrimSpace(provider) == "" || strings.TrimSpace(model) == "" {
-		return fmt.Errorf("%w: Grok model %q must use provider/model format (for example, xai/grok-code-fast-1); select a full model ID from your Grok installation, or clear the model override to use Agent default", ports.ErrChatConfigOptionInvalid, settings.Model)
 	}
 	return nil
 }

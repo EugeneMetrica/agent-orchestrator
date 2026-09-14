@@ -38,14 +38,15 @@ The driver SHALL return `domain.HarnessGrok` as its harness identifier.
 
 ### Requirement: Grok ACP Spawn Command Construction
 
-The driver SHALL construct the ACP spawn command with `grok agent` subcommand,
-appropriate flags, and `stdio` transport selector.
+The driver SHALL construct the ACP spawn command with the global
+`--no-auto-update` flag (in the same position the TUI adapter uses), the `grok
+agent` subcommand, appropriate flags, and the `stdio` transport selector.
 
 #### Scenario: Default permissions spawn command
 
 **GIVEN** a valid `acpdriver.LaunchConfig` with default permissions
 **WHEN** the driver's `configure()` callback is invoked
-**THEN** the returned args include `["agent", "--no-auto-update", "stdio"]`
+**THEN** the returned args include `["--no-auto-update", "agent", "stdio"]`
 **AND** no `--always-approve` flag is present
 
 #### Scenario: Bypass permissions spawn command
@@ -68,34 +69,38 @@ appropriate flags, and `stdio` transport selector.
 
 #### Scenario: Model override in spawn command
 
-**GIVEN** a `LaunchConfig` with `TurnSettings.Model = "xai/grok-3"`
+**GIVEN** a `LaunchConfig` with `Model = "grok-code-fast"`
 **WHEN** the driver's `configure()` callback is invoked
-**THEN** the args include `["--model", "xai/grok-3"]` before `stdio`
+**THEN** the args include `["--model", "grok-code-fast"]` before `stdio`
 
 ---
 
-### Requirement: Model Override Validation
+### Requirement: Model Override Forwarding
 
-The driver SHALL validate model overrides to ensure they use `provider/model` format.
+The driver SHALL forward a model override verbatim and SHALL NOT impose an id
+format. Grok model ids in the AO catalog and the TUI adapter are bare
+(`grok-code-fast`, `grok-4.5`), so availability is decided by the models the ACP
+session advertises, not by AO.
 
-#### Scenario: Valid model format passes
+#### Scenario: Bare model id is accepted
 
-**GIVEN** a model override `"xai/grok-3"`
-**WHEN** `validateTurnSettings()` is called
-**THEN** validation succeeds (no error)
+**GIVEN** a model override `"grok-code-fast"`
+**WHEN** the driver starts or resumes a conversation
+**THEN** AO does not reject it with `ports.ErrChatConfigOptionInvalid`
+**AND** the id reaches the launch as `["--model", "grok-code-fast"]` and the
+`model` session option
 
-#### Scenario: Invalid model format fails
+#### Scenario: Qualified model id is accepted
 
-**GIVEN** a model override `"grok-3"` (missing provider prefix)
-**WHEN** `validateTurnSettings()` is called
-**THEN** validation fails with `ports.ErrChatConfigOptionInvalid`
-**AND** the error message includes guidance about `provider/model` format
+**GIVEN** a model override `"xai/grok-code-fast-1"`
+**WHEN** `sessionOptions()` is called
+**THEN** it returns one `model` option carrying the id unchanged
 
-#### Scenario: Empty model passes
+#### Scenario: Empty model adds no option
 
-**GIVEN** an empty model override (`""`)
-**WHEN** `validateTurnSettings()` is called
-**THEN** validation succeeds (uses agent default)
+**GIVEN** an empty or blank model override
+**WHEN** `sessionOptions()` is called
+**THEN** it returns no options (uses agent default)
 
 ---
 

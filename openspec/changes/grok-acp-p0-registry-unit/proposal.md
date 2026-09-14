@@ -18,14 +18,15 @@ TUI for Grok Build.
 
 1. Create `backend/internal/adapters/chatdriver/grokacp/` package with a thin
    `nativeacp` binding.
-2. Implement `configure()` to build `grok agent [--always-approve] [--model M]
-   [--no-auto-update] stdio` spawn command.
-3. Implement `validateTurnSettings()` to require `provider/model` format.
+2. Implement `configure()` to build `grok --no-auto-update agent
+   [--always-approve] [--model M] stdio` spawn command.
+3. Forward the model id verbatim (bare ids such as `grok-code-fast` included);
+   availability stays the ACP session's advertised model catalog.
 4. Register `grokacp.New(grok.New(), log)` in `registry.Build()`.
 5. Write unit tests covering:
    - Harness identity
    - Spawn command construction for each permission mode
-   - Model validation (valid/invalid/empty)
+   - Model forwarding (bare id, qualified id, empty)
    - Session mode mapping
 
 ## Key Constraints
@@ -39,9 +40,9 @@ TUI for Grok Build.
 
 1. `registry.SupportsChat(domain.HarnessGrok)` returns `true`.
 2. `TestShippedChatDrivers` includes `domain.HarnessGrok`.
-3. `driver_test.go` unit tests pass for configure, sessionMode, validateTurnSettings.
+3. `driver_test.go` unit tests pass for configure, sessionMode, sessionOptions.
 4. Full CI suite passes: `gofmt`, `go build`, `go vet`, `go test -race ./...`,
-   `npm run lint` / golangci-lint v2.12.2.
+   `npm run lint` / golangci-lint v2.13.2.
 
 ## Non-Goals
 
@@ -55,7 +56,7 @@ TUI for Grok Build.
 | Gate | Description | Waiver |
 |------|-------------|--------|
 | G1 | Independent deep review → review note PASS/FAIL in `reviews/` | Required |
-| G2 | Full suite: gofmt, go build/vet, `go test -race ./...`, npm run lint / golangci-lint v2.12.2 | Required |
+| G2 | Full suite: gofmt, go build/vet, `go test -race ./...`, npm run lint / golangci-lint v2.13.2 | Required |
 | G3 | Live mini-task with real Grok | **WAIVED** (unit tests only) |
 | G4 | AO frontend/CLI UI verification | **WAIVED** (unit tests only) |
 
