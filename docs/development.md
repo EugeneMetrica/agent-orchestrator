@@ -10,7 +10,7 @@ How to set up, build, run, and test Agent Orchestrator locally.
 | golangci-lint | 2.13.2          | Pinned in `../mise.toml`; `mise install` provides it and `mise run lint` uses it                                |
 | Node.js       | 20.19.0         | `node --version`; install via [nodejs.org](https://nodejs.org/)                                                |
 | npm           | 10              | Ships with Node.js                                                                                             |
-| Nix (opt.)    | -               | `nix develop` drops you into a shell with all deps; see `../flake.nix`                                          |
+| Nix (opt.)    | -               | `nix develop` gives you Node, pnpm, just, and mise; its shell hook runs `mise install` so Go and golangci-lint come from the `../mise.toml` pins |
 
 Additional runtime dependencies for the daemon:
 
