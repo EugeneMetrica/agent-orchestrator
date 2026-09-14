@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	acpdriver "github.com/aoagents/agent-orchestrator/backend/internal/adapters/chatdriver/acp"
@@ -48,6 +49,28 @@ func TestConfigureSpawnsGrokACPStdio(t *testing.T) {
 			cfg:  acpdriver.LaunchConfig{Model: "   "},
 			want: []string{"--no-auto-update", "agent", "stdio"},
 		},
+		{
+			name: "standing instructions ride the global --rules flag",
+			cfg:  acpdriver.LaunchConfig{SystemPrompt: "ao standing instructions"},
+			want: []string{"--no-auto-update", "--rules", "ao standing instructions", "agent", "stdio"},
+		},
+		{
+			name: "standing instructions combine with permissions and model",
+			cfg: acpdriver.LaunchConfig{
+				SystemPrompt: "ao standing instructions",
+				Model:        "grok-code-fast",
+				Permissions:  ports.PermissionModeBypassPermissions,
+			},
+			want: []string{
+				"--no-auto-update", "--rules", "ao standing instructions",
+				"agent", "--always-approve", "--model", "grok-code-fast", "stdio",
+			},
+		},
+		{
+			name: "blank standing instructions add no rules flag",
+			cfg:  acpdriver.LaunchConfig{SystemPrompt: "  \n "},
+			want: []string{"--no-auto-update", "agent", "stdio"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -76,6 +99,48 @@ func TestConfigureAddsNoEnvironmentOverlay(t *testing.T) {
 	if env != nil {
 		t.Fatalf("env overlay = %#v, want nil", env)
 	}
+}
+
+// Chat delivers AO's standing instructions exactly like the TUI adapter does:
+// `--rules` appends to whatever system prompt the user's own Grok installation
+// configures, so AO never overrides it.
+func TestConfigureAppendsStandingInstructionsAsRules(t *testing.T) {
+	args, _, err := configure(context.Background(), acpdriver.LaunchConfig{
+		SystemPrompt: "ao standing instructions",
+		Permissions:  ports.PermissionModeBypassPermissions,
+	})
+	if err != nil {
+		t.Fatalf("configure: %v", err)
+	}
+	rules := indexOf(args, "--rules")
+	if rules < 0 || rules+1 >= len(args) || args[rules+1] != "ao standing instructions" {
+		t.Fatalf("args = %#v, want --rules followed by the standing instructions", args)
+	}
+	if agent := indexOf(args, "agent"); agent < rules {
+		t.Fatalf("args = %#v, want --rules before the agent subcommand", args)
+	}
+	if strings.Contains(strings.Join(args, " "), "system-prompt-override") {
+		t.Fatalf("args = %#v must append rules, not override Grok's system prompt", args)
+	}
+}
+
+func TestConfigureOmitsRulesWithoutStandingInstructions(t *testing.T) {
+	args, _, err := configure(context.Background(), acpdriver.LaunchConfig{Permissions: ports.PermissionModeAcceptEdits})
+	if err != nil {
+		t.Fatalf("configure: %v", err)
+	}
+	if indexOf(args, "--rules") >= 0 {
+		t.Fatalf("args = %#v, want no --rules flag for an empty system prompt", args)
+	}
+}
+
+func indexOf(args []string, want string) int {
+	for i, arg := range args {
+		if arg == want {
+			return i
+		}
+	}
+	return -1
 }
 
 func TestSessionModeUsesGrokPermissionModeIDs(t *testing.T) {

@@ -26,13 +26,20 @@ func New(plugin nativeacp.Plugin, log *slog.Logger) ports.ChatDriver {
 	}, log)
 }
 
-// configure builds `grok --no-auto-update agent [--always-approve]
-// [--model <model>] stdio`. The `agent` subcommand selects ACP mode and `stdio`
-// selects the JSON-RPC transport. `--no-auto-update` is a global flag and keeps
-// the TUI adapter's position, so an AO-managed session never self-updates
-// mid-run.
+// configure builds `grok --no-auto-update [--rules <text>] agent
+// [--always-approve] [--model <model>] stdio`. The `agent` subcommand selects
+// ACP mode and `stdio` selects the JSON-RPC transport. `--no-auto-update` and
+// `--rules` are global flags and keep the TUI adapter's position ahead of the
+// subcommand, so an AO-managed session never self-updates mid-run and receives
+// AO's standing instructions the same way a TUI session does.
 func configure(_ context.Context, cfg acpdriver.LaunchConfig) ([]string, map[string]string, error) {
-	args := []string{"--no-auto-update", "agent"}
+	args := []string{"--no-auto-update"}
+	// Grok appends --rules to its own system prompt rather than replacing it,
+	// which is why AO passes standing instructions through this flag.
+	if prompt := strings.TrimSpace(cfg.SystemPrompt); prompt != "" {
+		args = append(args, "--rules", prompt)
+	}
+	args = append(args, "agent")
 	if ports.NormalizePermissionMode(cfg.Permissions) == ports.PermissionModeBypassPermissions {
 		args = append(args, "--always-approve")
 	}
