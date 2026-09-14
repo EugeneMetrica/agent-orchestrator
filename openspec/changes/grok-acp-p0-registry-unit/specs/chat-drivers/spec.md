@@ -75,6 +75,30 @@ agent` subcommand, appropriate flags, and the `stdio` transport selector.
 
 ---
 
+### Requirement: Standing Instructions Delivery
+
+The driver SHALL deliver AO's standing instructions with the global `--rules`
+flag, in the same position and with the same append semantics the TUI adapter
+uses, so they add to — never replace — the system prompt configured by the
+user's own Grok installation. The driver SHALL NOT deliver a system prompt
+through ACP `session/new` metadata: `nativeacp.Config` exposes no `SessionMeta`
+hook, so no such channel exists in this phase.
+
+#### Scenario: System prompt is passed as rules
+
+**GIVEN** a `LaunchConfig` with a non-empty `SystemPrompt`
+**WHEN** the driver's `configure()` callback is invoked
+**THEN** the args include `["--rules", "<system prompt>"]`
+**AND** `--rules` precedes the `agent` subcommand
+
+#### Scenario: Empty system prompt adds no rules flag
+
+**GIVEN** a `LaunchConfig` with an empty or blank `SystemPrompt`
+**WHEN** the driver's `configure()` callback is invoked
+**THEN** no `--rules` flag is present
+
+---
+
 ### Requirement: Model Override Forwarding
 
 The driver SHALL forward a model override verbatim and SHALL NOT impose an id

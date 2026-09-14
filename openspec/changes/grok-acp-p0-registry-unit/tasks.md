@@ -35,6 +35,8 @@ Tests to implement:
 | `TestConfigure_AcceptEdits` | Args do NOT include `--always-approve` |
 | `TestConfigure_Auto` | Args do NOT include `--always-approve` |
 | `TestConfigure_ModelOverride` | Args include `["--model", "grok-code-fast"]` |
+| `TestConfigureAppendsStandingInstructionsAsRules` | `--rules <prompt>` present, before `agent` |
+| `TestConfigureOmitsRulesWithoutStandingInstructions` | No `--rules` for an empty/blank prompt |
 | `TestSessionMode_Default` | Returns `""` |
 | `TestSessionMode_AcceptEdits` | Returns `"acceptEdits"` |
 | `TestSessionMode_Auto` | Returns `"auto"` |

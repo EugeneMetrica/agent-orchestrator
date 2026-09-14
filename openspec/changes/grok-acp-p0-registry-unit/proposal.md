@@ -18,7 +18,7 @@ TUI for Grok Build.
 
 1. Create `backend/internal/adapters/chatdriver/grokacp/` package with a thin
    `nativeacp` binding.
-2. Implement `configure()` to build `grok --no-auto-update agent
+2. Implement `configure()` to build `grok --no-auto-update [--rules TEXT] agent
    [--always-approve] [--model M] stdio` spawn command.
 3. Forward the model id verbatim (bare ids such as `grok-code-fast` included);
    availability stays the ACP session's advertised model catalog.
@@ -28,6 +28,7 @@ TUI for Grok Build.
    - Spawn command construction for each permission mode
    - Model forwarding (bare id, qualified id, empty)
    - Session mode mapping
+   - Standing instructions delivered as `--rules`, absent when the prompt is empty
 
 ## Key Constraints
 
