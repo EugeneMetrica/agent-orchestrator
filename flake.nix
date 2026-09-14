@@ -16,12 +16,13 @@
       system:
       let
         pkgs = import nixpkgs { inherit system; };
-        go = pkgs.go_1_25;
       in
       {
+        # The Go toolchain is pinned by mise (mise.toml) rather than nixpkgs, so
+        # the dev shell and CI both resolve the version declared in go.mod
+        # instead of whatever go_1_xx nixpkgs happens to carry.
         devShells.default = pkgs.mkShell {
           buildInputs = [
-            go
             pkgs.gotools
             pkgs.nodejs_22
             pkgs.pnpm_10
@@ -29,7 +30,6 @@
           ];
 
           shellHook = ''
-            export GOROOT="${go}/share/go"
             export GOPATH="$PWD/.go"
             export GOBIN="$GOPATH/bin"
             export PNPM_HOME="$PWD/.pnpm"

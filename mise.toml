@@ -1,0 +1,4 @@
+# Local/dev toolchain pin. CI reads the same version from go.mod via setup-go's
+# go-version-file, so there is one source of truth for the Go version.
+[tools]
+go = "1.27.1"
