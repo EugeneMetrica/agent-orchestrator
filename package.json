@@ -2,7 +2,7 @@
 	"name": "agent-orchestrator",
 	"private": true,
 	"scripts": {
-		"lint": "cd backend && go test ./... && ../scripts/golangci-lint.sh run --path-mode=abs",
+		"lint": "echo 'npm run lint is retired: run \"mise run lint\" for the pinned golangci-lint gate, and \"cd backend && go test ./...\" for the Go suite' >&2 && exit 1",
 		"frontend:typecheck": "npm --prefix frontend run typecheck",
 		"cloud:check": "npm --prefix packages/cloud-client run generate && git diff --exit-code -- packages/cloud-client/src/schema.ts && npm --prefix packages/cloud-client run typecheck && npm --prefix packages/cloud-client test && npm --prefix packages/cloud-client run build",
 		"cloud:local": "bash cloud/scripts/cloud-local-up.sh",

@@ -42,7 +42,7 @@ TUI for Grok Build.
 2. `TestShippedChatDrivers` includes `domain.HarnessGrok`.
 3. `driver_test.go` unit tests pass for configure, sessionMode, sessionOptions.
 4. Full CI suite passes: `gofmt`, `go build`, `go vet`, `go test -race ./...`,
-   `npm run lint` / golangci-lint v2.13.2.
+   `mise run lint` (golangci-lint v2.13.2, pinned in mise.toml).
 
 ## Non-Goals
 
@@ -56,7 +56,7 @@ TUI for Grok Build.
 | Gate | Description | Waiver |
 |------|-------------|--------|
 | G1 | Independent deep review → review note PASS/FAIL in `reviews/` | Required |
-| G2 | Full suite: gofmt, go build/vet, `go test -race ./...`, npm run lint / golangci-lint v2.13.2 | Required |
+| G2 | Full suite: gofmt, go build/vet, `go test -race ./...`, mise run lint / golangci-lint v2.13.2 (pinned in mise.toml) | Required |
 | G3 | Live mini-task with real Grok | **WAIVED** (unit tests only) |
 | G4 | AO frontend/CLI UI verification | **WAIVED** (unit tests only) |
 

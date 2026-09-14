@@ -7,7 +7,7 @@ How to set up, build, run, and test Agent Orchestrator locally.
 | Tool          | Minimum version | Notes                                                                                                          |
 | ------------- | --------------- | -------------------------------------------------------------------------------------------------------------- |
 | Go            | 1.27.1          | `go version` to check; `mise install` uses the `../mise.toml` pin, or install via [go.dev](https://go.dev/dl/)  |
-| golangci-lint | 2.13.2          | Pinned in `../mise.toml`; `npm run lint` obtains it automatically (see below)                                   |
+| golangci-lint | 2.13.2          | Pinned in `../mise.toml`; `mise install` provides it and `mise run lint` uses it                                |
 | Node.js       | 20.19.0         | `node --version`; install via [nodejs.org](https://nodejs.org/)                                                |
 | npm           | 10              | Ships with Node.js                                                                                             |
 | Nix (opt.)    | -               | `nix develop` drops you into a shell with all deps; see `../flake.nix`                                          |
@@ -124,8 +124,12 @@ go test -v ./internal/cli/ # a specific package
 
 ### Lint
 
+`mise.toml` pins the linter, and the CI `lint` job reads that same pin, so there
+is one golangci-lint build for local and CI:
+
 ```bash
-npm run lint
+mise run lint                          # cd backend && golangci-lint run --path-mode=abs
+mise exec -- golangci-lint run --help  # any other golangci-lint invocation
 ```
 
 ### Code generation
@@ -251,7 +255,7 @@ go run ./cmd/ao --help
 | `go: go.mod requires go >= 1.27`     | Wrong Go version                           | `go version`; run `mise install` (pin in `mise.toml`) or install Go 1.27.1+ from [go.dev]                                                                                                                                                                                          |
 | `sqlc generate` produces errors      | Query SQL syntax or schema migration issue | Check `backend/internal/storage/sqlite/queries/` for SQL syntax, placeholder counts, and referenced columns/tables; if you changed the schema, add a new migration in `backend/internal/storage/sqlite/migrations/` instead of editing an existing one, then rerun `npm run sqlc` |
 | `openapi.yaml` is stale              | Changed DTOs without regenerating          | Run `npm run api` from repo root                                                                                                                                                                                                                                                  |
-| `golangci-lint` version mismatch     | Linter build older than the module's Go    | Run `npm run lint` from root: `scripts/golangci-lint.sh` resolves the release binary pinned in `mise.toml` (PATH, then mise, then a cached official download), which is the same version the CI `lint` job reads from that file. A source build (`go run …golangci-lint@v2.13.2`) cannot lint this module: it embeds Go 1.26 and refuses a module targeting Go 1.27 |
+| `golangci-lint` version mismatch     | Linter build older than the module's Go    | Run `mise run lint`, which uses the release binary pinned in `mise.toml` — the same version the CI `lint` job reads from that file. Do not build the linter from source: `go run …golangci-lint@v2.13.2` embeds Go 1.26 and refuses a module targeting Go 1.27                       |
 | Tests fail with "connection refused" | Test tries real daemon                     | Tests should use `httptest`; check for `go test ./...` without a live daemon                                                                                                                                                                                                      |
 
 ### Frontend build / test failures

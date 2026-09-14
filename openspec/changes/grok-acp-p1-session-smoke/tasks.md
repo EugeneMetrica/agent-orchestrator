@@ -67,7 +67,7 @@ Add Grok Chat driver to the status documentation:
 
 ```bash
 # From repo root
-npm run lint
+mise run lint
 
 # Backend specific
 cd backend
@@ -132,8 +132,7 @@ Manual verification using AO desktop app:
 - [ ] `go vet ./...` passes
 - [ ] `go test ./...` passes (live tests skip)
 - [ ] `go test -race ./...` passes
-- [ ] `golangci-lint run` passes (v2.12.2)
-- [ ] `npm run lint` passes
+- [ ] `mise run lint` passes (golangci-lint v2.13.2)
 
 ### G3: Live Mini-Task
 - [ ] `AO_LIVE_GROK_ACP=1` set

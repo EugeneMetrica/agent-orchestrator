@@ -138,7 +138,7 @@ func TestChatClaudeCodeModelOverride(t *testing.T) {
 ## Task 4a.9: Run Full CI Suite
 
 ```bash
-npm run lint
+mise run lint
 cd backend && gofmt -l . && go build ./... && go vet ./... && go test ./... && go test -race ./...
 ```
 
@@ -159,8 +159,7 @@ cd backend && gofmt -l . && go build ./... && go vet ./... && go test ./... && g
 - [ ] `go vet ./...` passes
 - [ ] `go test ./...` passes (live tests skip)
 - [ ] `go test -race ./...` passes
-- [ ] `golangci-lint run` passes (v2.12.2)
-- [ ] `npm run lint` passes
+- [ ] `mise run lint` passes (golangci-lint v2.13.2)
 
 ### G3: Live API E2E
 - [ ] `AO_LIVE_GROK_ACP=1` set

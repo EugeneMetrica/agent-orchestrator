@@ -82,7 +82,7 @@ cd backend && go test -v ./internal/adapters/chatdriver/registry/...
 
 ```bash
 # From repo root
-npm run lint
+mise run lint
 
 # Backend specific
 cd backend
@@ -110,8 +110,7 @@ go test -race ./...
 - [ ] `go vet ./...` passes
 - [ ] `go test ./...` passes
 - [ ] `go test -race ./...` passes
-- [ ] `golangci-lint run` passes (v2.13.2)
-- [ ] `npm run lint` passes
+- [ ] `mise run lint` passes (golangci-lint v2.13.2)
 
 ### G3: Live Mini-Task (WAIVED)
 - [x] **WAIVED** for P0 — unit tests only, no live Grok required

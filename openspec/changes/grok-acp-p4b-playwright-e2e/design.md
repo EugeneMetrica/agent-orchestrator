@@ -198,7 +198,7 @@ for (const harness of harnesses) {
 | Gate | Verification |
 |------|--------------|
 | G1 | Independent review note in `reviews/g1-review.md` |
-| G2 | `npm run lint && npm run frontend:typecheck` |
+| G2 | `mise run lint && npm run frontend:typecheck` |
 | G3 | `AO_LIVE_GROK_ACP=1 npx playwright test chat-grok-e2e` |
 | G4 | `AO_LIVE_CLAUDE_ACP=1 CLAUDE_ROUTER_URL=https://ai.metrica.pro/v1 npx playwright test chat-reference-e2e` |
 

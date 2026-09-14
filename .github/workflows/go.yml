@@ -132,13 +132,12 @@ jobs:
 
       - name: Resolve pinned golangci-lint version
         id: golangci-version
-        # mise.toml holds the single pin, and scripts/golangci-lint.sh (what
-        # `npm run lint` runs) reads the same line, so CI and the local loop
-        # cannot drift apart. The pin is bumped intentionally rather than letting
-        # an upstream release change CI, and must be built with Go >= the
-        # module's language version (go.mod is 1.27): v2.13.2 is built with
-        # go1.27, while older tags such as v2.12.2 are built with go1.25 and
-        # refuse to analyze 1.27 code.
+        # mise.toml holds the single pin; `mise run lint` is the local gate and
+        # uses the same line, so CI and the local loop cannot drift apart. The
+        # pin is bumped intentionally rather than letting an upstream release
+        # change CI, and must be built with Go >= the module's language version
+        # (go.mod is 1.27): v2.13.2 is built with go1.27, while older tags such
+        # as v2.12.2 are built with go1.25 and refuse to analyze 1.27 code.
         run: echo "version=v$(sed -n 's/^golangci-lint = "\(.*\)"$/\1/p' mise.toml)" >> "$GITHUB_OUTPUT"
 
       - name: golangci-lint

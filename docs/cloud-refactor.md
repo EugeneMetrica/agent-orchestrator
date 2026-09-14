@@ -118,7 +118,7 @@ model to those DTOs.
 Run focused tests while moving each boundary, then finish with:
 
 ```bash
-npm run lint
+mise run lint
 npm run shared:check
 npm run frontend:typecheck
 cd frontend && npm run typecheck:e2e && npm test && npm run test:e2e
