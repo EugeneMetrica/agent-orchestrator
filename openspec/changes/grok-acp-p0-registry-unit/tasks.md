@@ -39,8 +39,7 @@ Tests to implement:
 | `TestSessionMode_AcceptEdits` | Returns `"acceptEdits"` |
 | `TestSessionMode_Auto` | Returns `"auto"` |
 | `TestSessionMode_BypassPermissions` | Returns `"bypassPermissions"` |
-| `TestSessionOptions_BareModel` | `"grok-code-fast"` → one `model` option, id unchanged |
-| `TestSessionOptions_QualifiedModel` | `"xai/grok-code-fast-1"` → id unchanged |
+| `TestSessionOptions_AdvertisedModel` | `"grok-code-fast"`, `"grok-4.5"` → one `model` option, id unchanged |
 | `TestSessionOptions_EmptyModel` | `""` → no options |
 | `TestBareModelReachesLaunch` | Start/Resume with `"grok-code-fast"` is not rejected by AO |
 

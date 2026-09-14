@@ -1,4 +1,8 @@
-# Local/dev toolchain pin. CI reads the same version from go.mod via setup-go's
-# go-version-file, so there is one source of truth for the Go version.
+# Local/dev toolchain pin, and the single source of truth for both versions:
+# CI reads the Go version from go.mod via setup-go's go-version-file, and reads
+# the golangci-lint pin out of this file (see the `lint` job in
+# .github/workflows/go.yml). `scripts/golangci-lint.sh`, which `npm run lint`
+# runs, reads the same pin, so the local loop and CI lint with one build.
 [tools]
 go = "1.27.1"
+golangci-lint = "2.13.2"

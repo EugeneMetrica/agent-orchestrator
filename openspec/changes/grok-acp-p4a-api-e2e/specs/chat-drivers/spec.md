@@ -36,18 +36,18 @@ The daemon SHALL apply model overrides from turn settings to the Grok engine.
 **GIVEN** an active Grok Chat session
 **WHEN** `PATCH /api/v1/sessions/{id}/conversation/settings` is called with:
 ```json
-{"model": "xai/grok-3"}
+{"model": "grok-4.5"}
 ```
 **THEN** the response confirms model is set
 **AND** subsequent turns use the specified model
-**AND** `GET /api/v1/sessions/{id}/conversation` shows `settings.model == "xai/grok-3"`
+**AND** `GET /api/v1/sessions/{id}/conversation` shows `settings.model == "grok-4.5"`
 
 #### Scenario: Model switch not ignored
 
 **GIVEN** an active Grok Chat session with model set to `"xai/grok-2"`
-**WHEN** model is changed to `"xai/grok-3"` via API
+**WHEN** model is changed to `"grok-4.5"` via API
 **AND** a turn is sent
-**THEN** the engine processes the turn with model `"xai/grok-3"`
+**THEN** the engine processes the turn with model `"grok-4.5"`
 **AND** the turn's model is recorded in conversation state
 
 ---

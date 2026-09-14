@@ -78,8 +78,10 @@ agent` subcommand, appropriate flags, and the `stdio` transport selector.
 ### Requirement: Model Override Forwarding
 
 The driver SHALL forward a model override verbatim and SHALL NOT impose an id
-format. Grok model ids in the AO catalog and the TUI adapter are bare
-(`grok-code-fast`, `grok-4.5`), so availability is decided by the models the ACP
+format or keep a Grok model list of its own. AO's Grok model ids come from the
+installation itself — `grok models`, parsed by `modelcatalog.parseGrokModels`,
+the same ids the TUI adapter passes to `--model` — and are bare
+(`grok-code-fast`, `grok-4.5`). Availability is decided by the models the ACP
 session advertises, not by AO.
 
 #### Scenario: Bare model id is accepted
@@ -90,9 +92,9 @@ session advertises, not by AO.
 **AND** the id reaches the launch as `["--model", "grok-code-fast"]` and the
 `model` session option
 
-#### Scenario: Qualified model id is accepted
+#### Scenario: Advertised model id is forwarded unchanged
 
-**GIVEN** a model override `"xai/grok-code-fast-1"`
+**GIVEN** a model override `"grok-4.5"` as reported by `grok models`
 **WHEN** `sessionOptions()` is called
 **THEN** it returns one `model` option carrying the id unchanged
 

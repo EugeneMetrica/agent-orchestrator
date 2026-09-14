@@ -109,11 +109,13 @@ func sessionMode(permissions ports.PermissionMode) string {
 
 ### Model IDs: no format validation
 
-The binding installs no `ValidateTurnSettings` model gate. Grok model ids in the
-AO catalog and the TUI adapter are bare (`grok-code-fast`, `grok-4.5`), so a
-`provider/model` requirement would reject every real selection. The id is
-forwarded verbatim through `sessionOptions`, and the shared `acp` transport
-rejects ids the ACP session does not advertise:
+The binding installs no `ValidateTurnSettings` model gate and keeps no Grok model
+list. AO already learns Grok's models from the installation: `modelcatalog` runs
+`grok models` and `parseGrokModels` yields bare ids (`grok-code-fast`,
+`grok-4.5`), which is also what the TUI adapter passes to `--model`. A
+`provider/model` requirement would reject every one of them. The id is forwarded
+verbatim through `sessionOptions`, and the shared `acp` transport rejects ids the
+ACP session does not advertise:
 
 ```go
 func sessionOptions(settings ports.ChatTurnSettings) []acpdriver.SessionOption {

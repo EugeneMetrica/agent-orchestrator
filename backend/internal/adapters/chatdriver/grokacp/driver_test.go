@@ -34,14 +34,9 @@ func TestConfigureSpawnsGrokACPStdio(t *testing.T) {
 			want: []string{"--no-auto-update", "agent", "--always-approve", "stdio"},
 		},
 		{
-			name: "bare model override",
+			name: "model override forwards the id Grok advertises",
 			cfg:  acpdriver.LaunchConfig{Model: "grok-code-fast"},
 			want: []string{"--no-auto-update", "agent", "--model", "grok-code-fast", "stdio"},
-		},
-		{
-			name: "qualified model override",
-			cfg:  acpdriver.LaunchConfig{Model: "xai/grok-code-fast-1"},
-			want: []string{"--no-auto-update", "agent", "--model", "xai/grok-code-fast-1", "stdio"},
 		},
 		{
 			name: "model override and bypass permissions",
@@ -102,7 +97,9 @@ func TestSessionOptionsUseAdvertisedModelOption(t *testing.T) {
 	if got := sessionOptions(ports.ChatTurnSettings{}); got != nil {
 		t.Fatalf("empty settings = %#v", got)
 	}
-	for _, model := range []string{"grok-code-fast", "grok-4.5", "xai/grok-code-fast-1"} {
+	// Ids in the shape `grok models` reports and modelcatalog parses; AO keeps no
+	// Grok model list of its own.
+	for _, model := range []string{"grok-code-fast", "grok-4.5"} {
 		got := sessionOptions(ports.ChatTurnSettings{Model: model})
 		want := []acpdriver.SessionOption{{ID: "model", Value: model}}
 		if !reflect.DeepEqual(got, want) {

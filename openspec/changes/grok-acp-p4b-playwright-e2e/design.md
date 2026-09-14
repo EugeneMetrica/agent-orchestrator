@@ -90,7 +90,7 @@ test.describe("Grok Chat E2E", () => {
 
         // Switch model via dropdown
         await page.getByRole("button", { name: "Model" }).click();
-        await page.getByRole("option", { name: "xai/grok-3" }).click();
+        await page.getByRole("option", { name: "grok-4.5" }).click();
 
         // Send message
         await page.getByRole("combobox", { name: "Message" }).fill("Confirm model");
@@ -98,7 +98,7 @@ test.describe("Grok Chat E2E", () => {
 
         // Verify in API state (via test helper)
         const state = await getConversationState(page);
-        expect(state.settings.model).toBe("xai/grok-3");
+        expect(state.settings.model).toBe("grok-4.5");
     });
 
     test("file attachment delivered to worktree", async ({ page }) => {
