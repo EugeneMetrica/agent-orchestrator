@@ -141,8 +141,22 @@ func TestMuseReturnsStaticCatalogWithoutStartingAgent(t *testing.T) {
 	}
 }
 
+// clearClaudeModelEnv removes the Claude Code model configuration inherited from
+// the developer or CI environment so tests observe only their own inputs.
+func clearClaudeModelEnv(t *testing.T) {
+	t.Helper()
+	for _, key := range []string{
+		"ANTHROPIC_MODEL",
+		"ANTHROPIC_DEFAULT_OPUS_MODEL",
+		"ANTHROPIC_DEFAULT_SONNET_MODEL",
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL",
+	} {
+		t.Setenv(key, "")
+	}
+}
+
 func TestClaudeReturnsStaticCatalogWithConfiguredFallback(t *testing.T) {
-	t.Setenv("ANTHROPIC_MODEL", "")
+	clearClaudeModelEnv(t)
 	t.Setenv("HOME", t.TempDir())
 	got, err := (Discoverer{}).Discover(context.Background(), ports.AgentModelDiscoveryRequest{
 		AgentID: "claude-code",
@@ -155,6 +169,8 @@ func TestClaudeReturnsStaticCatalogWithConfiguredFallback(t *testing.T) {
 	wantLabels := map[string]string{
 		"sonnet": "Sonnet", "fable": "Fable 5.1", "opus": "Opus",
 		"haiku": "Haiku", "opus[1m]": "Opus (1M context)",
+		"glm-5.3":                  "glm-5.3 (Opus alias)",
+		"glm-5.3-flash":            "glm-5.3-flash (Sonnet alias)",
 		"claude-opus-4-5-20251101": "claude-opus-4-5-20251101",
 	}
 	if got.Source != "catalog" || len(got.Models) != len(wantLabels) {
@@ -167,6 +183,96 @@ func TestClaudeReturnsStaticCatalogWithConfiguredFallback(t *testing.T) {
 		if item.IsDefault != (item.ID == "claude-opus-4-5-20251101") {
 			t.Fatalf("default marker = %#v", item)
 		}
+	}
+}
+
+func TestClaudeCatalogKeepsGatewayDefaultsSelectableWithoutOverrides(t *testing.T) {
+	clearClaudeModelEnv(t)
+	t.Setenv("HOME", t.TempDir())
+	got, err := (Discoverer{}).Discover(context.Background(), ports.AgentModelDiscoveryRequest{
+		AgentID: "claude-code",
+		Binary:  "/missing/claude",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	labels := map[string]string{}
+	for _, item := range got.Models {
+		labels[item.ID] = item.Label
+	}
+	if labels["glm-5.3"] != "glm-5.3 (Opus alias)" || labels["glm-5.3-flash"] != "glm-5.3-flash (Sonnet alias)" {
+		t.Fatalf("models = %#v, want the GLM gateway rows", got.Models)
+	}
+	// Haiku has no gateway default, so an unset override adds no row.
+	if _, unexpected := labels["glm-4.6v-flash"]; unexpected {
+		t.Fatalf("models = %#v, want no Haiku row without an override", got.Models)
+	}
+}
+
+func TestClaudeCatalogUsesAliasOverridesFromEnvAndSettings(t *testing.T) {
+	clearClaudeModelEnv(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeClaudeSettingsFile(t, filepath.Join(home, ".claude", "settings.json"), `{
+		"env": {
+			"ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-5.3-air",
+			"ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-4.6v-flash"
+		}
+	}`)
+	got, err := (Discoverer{}).Discover(context.Background(), ports.AgentModelDiscoveryRequest{
+		AgentID: "claude-code",
+		Binary:  "/missing/claude",
+		Env:     map[string]string{"ANTHROPIC_DEFAULT_OPUS_MODEL": "glm-5.3-pro"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	labels := map[string]string{}
+	for _, item := range got.Models {
+		labels[item.ID] = item.Label
+	}
+	want := map[string]string{
+		"glm-5.3-pro":    "glm-5.3-pro (Opus alias)",
+		"glm-5.3-air":    "glm-5.3-air (Sonnet alias)",
+		"glm-4.6v-flash": "glm-4.6v-flash (Haiku alias)",
+	}
+	for id, label := range want {
+		if labels[id] != label {
+			t.Fatalf("models = %#v, want %q labeled %q", got.Models, id, label)
+		}
+	}
+	// An explicit override replaces the gateway default for that alias.
+	if _, unexpected := labels["glm-5.3"]; unexpected {
+		t.Fatalf("models = %#v, want no fallback row for an overridden alias", got.Models)
+	}
+	if _, unexpected := labels["glm-5.3-flash"]; unexpected {
+		t.Fatalf("models = %#v, want no fallback row for an overridden alias", got.Models)
+	}
+}
+
+func TestClaudeCatalogMarksAliasModelAsDefaultWithoutDuplicating(t *testing.T) {
+	clearClaudeModelEnv(t)
+	t.Setenv("HOME", t.TempDir())
+	got, err := (Discoverer{}).Discover(context.Background(), ports.AgentModelDiscoveryRequest{
+		AgentID: "claude-code",
+		Binary:  "/missing/claude",
+		Env:     map[string]string{"ANTHROPIC_MODEL": "glm-5.3"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := 0
+	for _, item := range got.Models {
+		if item.ID != "glm-5.3" {
+			continue
+		}
+		seen++
+		if !item.IsDefault {
+			t.Fatalf("model %#v, want the configured GLM row marked default", item)
+		}
+	}
+	if seen != 1 {
+		t.Fatalf("models = %#v, want exactly one glm-5.3 row", got.Models)
 	}
 }
 
@@ -564,23 +670,27 @@ func TestParseJSONModelsSupportsKiroAndDevinFields(t *testing.T) {
 	}
 }
 
-func writeClaudeSettings(t *testing.T, dir, model string) {
+func writeClaudeSettingsFile(t *testing.T, path, body string) {
 	t.Helper()
-	settingsDir := filepath.Join(dir, ".claude")
-	if err := os.MkdirAll(settingsDir, 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	body := "{}"
-	if model != "" {
-		body = `{"model": "` + model + `"}`
-	}
-	if err := os.WriteFile(filepath.Join(settingsDir, "settings.json"), []byte(body), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }
 
+func writeClaudeSettings(t *testing.T, dir, model string) {
+	t.Helper()
+	body := "{}"
+	if model != "" {
+		body = `{"model": "` + model + `"}`
+	}
+	writeClaudeSettingsFile(t, filepath.Join(dir, ".claude", "settings.json"), body)
+}
+
 func TestCatalogFingerprintTracksTheConfiguredClaudeCodeModel(t *testing.T) {
-	t.Setenv("ANTHROPIC_MODEL", "")
+	clearClaudeModelEnv(t)
 	dir := t.TempDir()
 	writeClaudeSettings(t, dir, "opus")
 
@@ -614,8 +724,32 @@ func TestCatalogFingerprintKeepsTheExecutableOnlyValueForConfiglessAgents(t *tes
 	}
 }
 
+func TestCatalogFingerprintTracksClaudeCodeAliasOverrides(t *testing.T) {
+	clearClaudeModelEnv(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := t.TempDir()
+
+	base := CatalogFingerprint(context.Background(), "claude-code", "", dir, nil)
+
+	// An alias remap changes which rows the picker offers, from the session
+	// environment as well as from the settings "env" block.
+	fromEnv := CatalogFingerprint(context.Background(), "claude-code", "", dir,
+		map[string]string{"ANTHROPIC_DEFAULT_OPUS_MODEL": "glm-5.3-pro"})
+	if fromEnv == base {
+		t.Fatal("fingerprint unchanged after an alias override in the session environment")
+	}
+
+	writeClaudeSettingsFile(t, filepath.Join(home, ".claude", "settings.json"),
+		`{"env": {"ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-5.3-air"}}`)
+	fromSettings := CatalogFingerprint(context.Background(), "claude-code", "", dir, nil)
+	if fromSettings == base {
+		t.Fatal("fingerprint unchanged after an alias override in settings")
+	}
+}
+
 func TestCatalogFingerprintDistinguishesConfiguredFromUnconfigured(t *testing.T) {
-	t.Setenv("ANTHROPIC_MODEL", "")
+	clearClaudeModelEnv(t)
 	t.Setenv("HOME", t.TempDir())
 	unset := t.TempDir()
 	writeClaudeSettings(t, unset, "")

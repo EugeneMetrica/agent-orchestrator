@@ -105,13 +105,19 @@ Four things are worth knowing before reproducing it:
   not part of the mapping above, so background functionality keeps resolving a
   Haiku-class id the gateway may not serve. Point it at a cheap gateway model if
   background calls start failing.
-- **AO's agent-config model picker does not read the `env` block.** It resolves
-  a Claude model from `ANTHROPIC_MODEL` (project env, then process env), then a
-  top-level `"model"` key in the worktree's `.claude/settings.local.json` or
-  `.claude/settings.json`, then `~/.claude/settings.json`. A mapping configured
-  only inside `env` is invisible to it — which is harmless, because in Chat the
-  model list comes from the live ACP session's own `model` config option, and
-  that reflects whatever the gateway resolved.
+- **AO's agent-config model picker surfaces the mapped GLM ids.** It reads
+  `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL`, and
+  `ANTHROPIC_DEFAULT_HAIKU_MODEL` from, in precedence order, the session
+  environment, the daemon process environment, and the `env` block of the
+  worktree's `.claude/settings.local.json`, the worktree's
+  `.claude/settings.json`, and `~/.claude/settings.json` — so the mapping above
+  shows up as selectable `glm-5.3` / `glm-5.3-flash` rows next to the alias
+  entries. With no override set, the documented gateway defaults (`glm-5.3` for
+  Opus, `glm-5.3-flash` for Sonnet) stay listed; Haiku appears only when its
+  variable is set. In Chat the live model list still comes from the ACP
+  session's own `model` config option, which reflects whatever the gateway
+  resolved. Details in
+  [docs/harnesses/claude-code-glm.md](claude-code-glm.md).
 - **Billing attribution follows the host, not the model.** `api.z.ai` is
   recorded as the `zai` provider and priced from
   `pricing/catalog/v1/providers/zai`, which already carries `glm-5.3` and
