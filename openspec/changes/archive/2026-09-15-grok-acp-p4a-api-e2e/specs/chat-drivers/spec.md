@@ -144,6 +144,14 @@ The daemon SHALL maintain consistent server state across API operations.
 
 Tests SHALL verify Grok behavior matches Claude Code for the same API surface.
 
+The reference is the Claude Code harness driven through AO's `claudeacp`
+binding. Which models answer behind it is the operator's own Claude Code
+configuration, not AO's: on this stack that is the Anthropic-compatible gateway
+at `https://ai.metrica.pro/v1` with the GLM 5.3 family as its primary model
+mapping. The Anthropic wire protocol is the contract both sides speak, so the
+parity claim is about the harness contract and holds for any model the gateway
+serves.
+
 #### Scenario: Same API operations produce equivalent outcomes
 
 **GIVEN** identical API operation sequences for Grok and Claude Code
@@ -164,6 +172,7 @@ Tests SHALL verify Grok behavior matches Claude Code for the same API surface.
 |----------|---------|
 | `AO_LIVE_GROK_ACP` | Enable live Grok tests |
 | `AO_LIVE_CLAUDE_ACP` | Enable Claude Code reference tests |
+| `AO_CHAT_E2E` | Enable the Chat e2e suite at all |
 
 ## Test Functions
 

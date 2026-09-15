@@ -97,8 +97,23 @@ The OPSX is ready to guide implementation. No blockers identified.
 
 ---
 
+## Closure (2026-09-15)
+
+All six changes are implemented, merged
+([#3](https://github.com/EugeneMetrica/agent-orchestrator/pull/3)–[#8](https://github.com/EugeneMetrica/agent-orchestrator/pull/8)),
+and archived under `openspec/changes/archive/2026-09-15-grok-acp-*`. Their
+requirements are merged into the `chat-drivers` capability spec at
+`openspec/specs/chat-drivers/spec.md`. Per-phase outcomes, including which live
+gates ran, are in each archived `tasks.md`; the P4b UI evidence and the parity
+scope are in `docs/STATUS.md` and
+`docs/research/grok-claude-parity-p4b.md`.
+
+Finding A1 is resolved: the CLI is `@fission-ai/openspec`, and
+`npx -y @fission-ai/openspec@1.13.0 validate --all --strict` passes on the
+archived state.
+
 ## Notes for Implementation
 
-1. `openspec validate` CLI was not available; recommend installing for future CI gating
+1. `openspec validate` CLI was not available at review time; see Closure above
 2. Existing `grok.Plugin` (TUI mode) and `domain.HarnessGrok` already exist — implementation adds only the chat driver binding
 3. Pattern for live tests (`cursoracp/live_test.go`) is well-established and should be followed closely
