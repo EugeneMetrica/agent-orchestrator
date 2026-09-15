@@ -18,23 +18,34 @@ TUI for Grok Build.
 
 1. Create `backend/internal/adapters/chatdriver/grokacp/` package with a thin
    `nativeacp` binding.
-2. Implement `configure()` to build `grok --no-auto-update [--rules TEXT] agent
-   [--always-approve] [--model M] stdio` spawn command.
-3. Forward the model id verbatim (bare ids such as `grok-code-fast` included);
+2. Implement `configure()` to build the `grok --no-auto-update agent
+   [--always-approve] [--model M] stdio` spawn command. The system prompt stays
+   off the argv: `--rules` is read only by Grok's TUI and `-p` paths, and
+   `grok … agent stdio` accepts it and then ignores it.
+3. Deliver AO's standing instructions through ACP session metadata (`_meta`) under
+   Grok's `rules` key, which Grok folds into its own `<human_rules>` section. This
+   needs a `SessionMeta` pass-through on `nativeacp.Config`, which does not exist
+   yet: the shared `acp` transport has the hook and already sends it on
+   `session/new`, `session/load`, and `session/resume`, but the `nativeacp` layer
+   never forwards it.
+4. Forward the model id verbatim (bare ids such as `grok-code-fast` included);
    availability stays the ACP session's advertised model catalog.
-4. Register `grokacp.New(grok.New(), log)` in `registry.Build()`.
-5. Write unit tests covering:
+5. Register `grokacp.New(grok.New(), log)` in `registry.Build()`.
+6. Write unit tests covering:
    - Harness identity
    - Spawn command construction for each permission mode
    - Model forwarding (bare id, qualified id, empty)
    - Session mode mapping
-   - Standing instructions delivered as `--rules`, absent when the prompt is empty
+   - Standing instructions delivered as `_meta.rules`, never on the argv, and
+     absent entirely when the prompt is empty
+   - The `nativeacp` `SessionMeta` pass-through reaching `acpdriver.Config`
 
 ## Key Constraints
 
 - **No credential injection**: reuse existing `grok.Plugin` auth probe.
 - **Unit tests only**: do not duplicate shared `acp`/`nativeacp`/`persistenthost`
-  tests; test only the Grok-specific binding logic.
+  tests; test the Grok-specific binding logic, plus the one new `nativeacp`
+  behavior this phase introduces (the `SessionMeta` pass-through).
 - **No live calls**: P0 tests must pass without Grok CLI installed.
 
 ## Success Criteria
@@ -64,6 +75,10 @@ TUI for Grok Build.
 ## Impact
 
 - **Scope**: `backend/internal/adapters/chatdriver/grokacp/` (new),
+  `backend/internal/adapters/chatdriver/nativeacp/` (`SessionMeta` pass-through),
   `backend/internal/adapters/chatdriver/registry/` (registration + test update).
-- **Risk**: Low. Pattern mirrors existing `opencodeacp`, `ompacp`, `kimchiacp`.
+- **Risk**: Low. Pattern mirrors existing `opencodeacp`, `ompacp`, `kimchiacp`,
+  and the metadata channel mirrors `claudeacp`/`piacp`, which already use the
+  shared transport's `SessionMeta` hook directly. The `nativeacp` addition is
+  additive: bindings that set no hook keep sending no metadata.
 - **Dependencies**: Existing `grok.Plugin`, `nativeacp` package.

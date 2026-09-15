@@ -57,6 +57,7 @@ func New(plugin nativeacp.Plugin, log *slog.Logger) ports.ChatDriver {
     return nativeacp.New(plugin, nativeacp.Config{
         Harness:        domain.HarnessGrok,
         Configure:      configure,
+        SessionMeta:    sessionMeta,
         SessionMode:    sessionMode,
         SessionOptions: sessionOptions,
     }, log)
@@ -65,19 +66,14 @@ func New(plugin nativeacp.Plugin, log *slog.Logger) ports.ChatDriver {
 
 ### configure Function
 
-Constructs spawn args for `grok --no-auto-update [--rules TEXT] agent [--always-approve] [--model M] stdio`:
+Constructs spawn args for `grok --no-auto-update agent [--always-approve] [--model M] stdio`:
 
 ```go
 func configure(ctx context.Context, cfg acpdriver.LaunchConfig) ([]string, map[string]string, error) {
-    // --no-auto-update and --rules are global flags, so they precede the
-    // subcommand exactly as the TUI adapter passes them.
-    args := []string{"--no-auto-update"}
-
-    // AO's standing instructions, appended to Grok's own system prompt
-    if prompt := strings.TrimSpace(cfg.SystemPrompt); prompt != "" {
-        args = append(args, "--rules", prompt)
-    }
-    args = append(args, "agent")
+    // --no-auto-update is a global flag, so it precedes the subcommand exactly
+    // as the TUI adapter passes it. Standing instructions are not on the argv:
+    // see "System prompt: ACP _meta.rules, not argv --rules" below.
+    args := []string{"--no-auto-update", "agent"}
 
     // Bypass-permissions mode → --always-approve CLI flag
     if ports.NormalizePermissionMode(cfg.Permissions) == ports.PermissionModeBypassPermissions {
@@ -91,6 +87,22 @@ func configure(ctx context.Context, cfg acpdriver.LaunchConfig) ([]string, map[s
 
     args = append(args, "stdio")
     return args, nil, nil
+}
+```
+
+### sessionMeta Function
+
+Carries AO's standing instructions in the ACP session metadata Grok's agent mode
+reads. Returns `nil` for an empty or whitespace-only prompt so the request has no
+`rules` key at all:
+
+```go
+func sessionMeta(cfg acpdriver.LaunchConfig) map[string]any {
+    prompt := strings.TrimSpace(cfg.SystemPrompt)
+    if prompt == "" {
+        return nil
+    }
+    return map[string]any{"rules": prompt}
 }
 ```
 
@@ -173,8 +185,10 @@ Unit tests covering the Grok-specific binding only (not shared nativeacp logic):
 | `TestConfigure_DefaultPermissions` | Returns `--no-auto-update agent stdio` |
 | `TestConfigure_BypassPermissions` | Includes `--always-approve` |
 | `TestConfigure_ModelOverride` | Includes `--model grok-code-fast` |
-| `TestConfigureAppendsStandingInstructionsAsRules` | `--rules <prompt>` precedes `agent` |
-| `TestConfigureOmitsRulesWithoutStandingInstructions` | No `--rules` when the prompt is empty |
+| `TestConfigureNeverPutsRulesOnArgv` | No `--rules` on the argv for any prompt |
+| `TestSessionMetaDeliversStandingInstructionsAsRules` | `_meta` carries `rules: <prompt>` |
+| `TestSessionMetaTrimsAndOmitsBlankStandingInstructions` | Prompt trimmed; blank yields `nil` meta |
+| `TestBindingForwardsSessionMetaToTransport` (`nativeacp`) | `nativeacp.Config.SessionMeta` reaches `acpdriver.Config` |
 | `TestSessionMode_Mapping` | Each permission mode maps correctly |
 | `TestSessionOptions_ModelForwarded` | Bare and qualified ids forward verbatim |
 | `TestSessionOptions_EmptyModel` | Empty/blank model yields no option |
@@ -207,37 +221,62 @@ grok --no-auto-update [--permission-mode <mode>] [--model <model>] [--rules <tex
 
 Chat mode (new ACP):
 ```
-grok --no-auto-update [--rules <text>] agent [--always-approve] [--model <model>] stdio
+grok --no-auto-update agent [--always-approve] [--model <model>] stdio
 ```
 
 Key differences:
 - `agent` subcommand enables ACP mode
 - `stdio` subcommand selects JSON-RPC transport
 - `--always-approve` replaces TUI's `--permission-mode bypassPermissions`
-- `--rules` carries AO's standing instructions in both modes
+- TUI takes AO's standing instructions on the argv as `--rules`; agent mode takes
+  them in ACP session metadata instead (see below)
 
-## System prompt: `--rules`, not ACP session metadata
+## System prompt: ACP `_meta.rules`, not argv `--rules`
 
-P0 delivers the system prompt exactly the way the TUI adapter does: as
-`--rules <text>`, appended to the argv when `acpdriver.LaunchConfig.SystemPrompt`
-is non-empty. Grok treats `--rules` as an addition to the system prompt its own
-installation configures, so AO's standing instructions never replace the user's.
+`--rules` is **not** a global flag that agent mode forwards. In grok-build only
+the TUI and `-p` paths read it; `grok … agent stdio` accepts it on the command
+line and then ignores it. An argv-borne `--rules` therefore looks like delivery
+while dropping AO's standing instructions silently — there is no error and no
+warning, which is exactly what makes it worth calling out here.
 
-`--rules` is a top-level flag, so it keeps `--no-auto-update`'s position ahead of
-the `agent` subcommand:
+Agent mode takes appended standing instructions through the ACP session's
+`_meta`, under the key `rules` (the key name is Grok's, not AO's). Grok folds
+that value into the `<human_rules>` section of the system prompt its own
+installation configures, so AO's instructions are appended and never replace the
+user's.
+
+The shared `acp` transport already sends `Config.SessionMeta` on every request
+that creates the provider-side session object — `session/new`, `session/load`,
+and `session/resume` — so a recovered conversation receives the standing context
+again rather than relying on replayed transcript history.
+
+`nativeacp.Config` did not expose that hook, which is the gap this phase closes.
+The addition is a field and one assignment in `buildConfig`; the shared transport
+and every other native binding are unchanged, and a binding that sets no
+`SessionMeta` still sends no metadata:
 
 ```go
-args := []string{"--no-auto-update"}
-if prompt := strings.TrimSpace(cfg.SystemPrompt); prompt != "" {
-    args = append(args, "--rules", prompt)
-}
-args = append(args, "agent")
+// nativeacp.Config
+SessionMeta func(acpdriver.LaunchConfig) map[string]any
+
+// nativeacp.buildConfig → acpdriver.Config
+SessionMeta: cfg.SessionMeta,
 ```
 
-There is **no** system prompt delivery through ACP `session/new` metadata in P0.
-The shared `acp` transport does have a `SessionMeta` hook, but `nativeacp.Config`
-— the layer this binding is built on — exposes none, so nothing this driver does
-reaches the `Meta` field of the `session/new` request. Any future metadata-based
-channel would need a `SessionMeta` hook on `nativeacp.Config` and a Grok-side
-shape confirmed against a real `grok agent stdio` session; that is deferred to a
-later phase and is not part of P0.
+The Grok binding supplies it, and `configure` stays free of the prompt:
+
+```go
+args := []string{"--no-auto-update", "agent"}
+// … --always-approve / --model / stdio only
+
+func sessionMeta(cfg acpdriver.LaunchConfig) map[string]any {
+    prompt := strings.TrimSpace(cfg.SystemPrompt)
+    if prompt == "" {
+        return nil
+    }
+    return map[string]any{"rules": prompt}
+}
+```
+
+Returning `nil` for a blank prompt is deliberate: the request then carries no
+`rules` key, rather than an empty one Grok would have to interpret.

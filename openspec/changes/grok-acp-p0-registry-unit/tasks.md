@@ -11,12 +11,31 @@ No live integration; gates all subsequent phases.
 
 **File**: `backend/internal/adapters/chatdriver/grokacp/driver.go`
 
-Create the package with `New()`, `configure()`, `sessionMode()`, and
-`sessionOptions()` functions as specified in design.md.
+Create the package with `New()`, `configure()`, `sessionMeta()`, `sessionMode()`,
+and `sessionOptions()` functions as specified in design.md.
+
+`configure()` must not carry the system prompt: agent mode ignores `--rules`.
+`sessionMeta()` returns `{"rules": <trimmed prompt>}`, or `nil` when blank.
 
 **Verification**:
 ```bash
 cd backend && go build ./internal/adapters/chatdriver/grokacp/...
+```
+
+---
+
+## Task 0.1b: Expose the SessionMeta Hook on nativeacp
+
+**File**: `backend/internal/adapters/chatdriver/nativeacp/driver.go`
+
+Add `SessionMeta func(acpdriver.LaunchConfig) map[string]any` to `nativeacp.Config`
+and assign it to `acpdriver.Config.SessionMeta` in `buildConfig`. Pass-through
+only — no synthesis, inspection, or defaulting. Without this the Grok binding's
+metadata never reaches the ACP request.
+
+**Verification**:
+```bash
+cd backend && go test ./internal/adapters/chatdriver/nativeacp/...
 ```
 
 ---
@@ -35,8 +54,9 @@ Tests to implement:
 | `TestConfigure_AcceptEdits` | Args do NOT include `--always-approve` |
 | `TestConfigure_Auto` | Args do NOT include `--always-approve` |
 | `TestConfigure_ModelOverride` | Args include `["--model", "grok-code-fast"]` |
-| `TestConfigureAppendsStandingInstructionsAsRules` | `--rules <prompt>` present, before `agent` |
-| `TestConfigureOmitsRulesWithoutStandingInstructions` | No `--rules` for an empty/blank prompt |
+| `TestConfigureNeverPutsRulesOnArgv` | No `--rules` and no prompt text on the argv, for any prompt |
+| `TestSessionMetaDeliversStandingInstructionsAsRules` | Metadata is exactly `{"rules": "<prompt>"}` |
+| `TestSessionMetaTrimsAndOmitsBlankStandingInstructions` | Prompt trimmed; empty/blank → `nil` metadata |
 | `TestSessionMode_Default` | Returns `""` |
 | `TestSessionMode_AcceptEdits` | Returns `"acceptEdits"` |
 | `TestSessionMode_Auto` | Returns `"auto"` |
@@ -48,6 +68,21 @@ Tests to implement:
 **Verification**:
 ```bash
 cd backend && go test -v ./internal/adapters/chatdriver/grokacp/...
+```
+
+---
+
+## Task 0.2b: Cover the nativeacp SessionMeta Pass-Through
+
+**File**: `backend/internal/adapters/chatdriver/nativeacp/driver_test.go`
+
+| Test | Assertion |
+|------|-----------|
+| `TestBindingForwardsSessionMetaToTransport` | Hook forwarded verbatim; absent hook leaves `acpdriver.Config.SessionMeta` nil |
+
+**Verification**:
+```bash
+cd backend && go test -v ./internal/adapters/chatdriver/nativeacp/...
 ```
 
 ---

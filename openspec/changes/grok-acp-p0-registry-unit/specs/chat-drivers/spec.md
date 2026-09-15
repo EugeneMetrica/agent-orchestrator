@@ -77,25 +77,58 @@ agent` subcommand, appropriate flags, and the `stdio` transport selector.
 
 ### Requirement: Standing Instructions Delivery
 
-The driver SHALL deliver AO's standing instructions with the global `--rules`
-flag, in the same position and with the same append semantics the TUI adapter
-uses, so they add to — never replace — the system prompt configured by the
-user's own Grok installation. The driver SHALL NOT deliver a system prompt
-through ACP `session/new` metadata: `nativeacp.Config` exposes no `SessionMeta`
-hook, so no such channel exists in this phase.
+The driver SHALL deliver AO's standing instructions through ACP session
+metadata, under the key `rules`, so Grok's agent mode folds them into the
+`<human_rules>` section of the system prompt the user's own installation
+configures — adding to it and never replacing it.
 
-#### Scenario: System prompt is passed as rules
+The driver SHALL NOT place standing instructions on the argv. `--rules` is read
+only by Grok's TUI and `-p` paths; `grok … agent stdio` accepts the flag and
+ignores it, so an argv-borne prompt is dropped with no error or warning.
+
+#### Scenario: System prompt is delivered as session metadata
 
 **GIVEN** a `LaunchConfig` with a non-empty `SystemPrompt`
-**WHEN** the driver's `configure()` callback is invoked
-**THEN** the args include `["--rules", "<system prompt>"]`
-**AND** `--rules` precedes the `agent` subcommand
+**WHEN** the driver's `sessionMeta()` callback is invoked
+**THEN** it returns metadata whose `rules` key carries the trimmed system prompt
 
-#### Scenario: Empty system prompt adds no rules flag
+#### Scenario: Standing instructions never reach the argv
 
-**GIVEN** a `LaunchConfig` with an empty or blank `SystemPrompt`
+**GIVEN** a `LaunchConfig` with any `SystemPrompt`, empty or not
 **WHEN** the driver's `configure()` callback is invoked
 **THEN** no `--rules` flag is present
+**AND** the system prompt text does not appear in the args
+
+#### Scenario: Empty system prompt sends no rules key
+
+**GIVEN** a `LaunchConfig` with an empty or blank `SystemPrompt`
+**WHEN** the driver's `sessionMeta()` callback is invoked
+**THEN** it returns `nil`, so the ACP request carries no `rules` key
+
+---
+
+### Requirement: Native ACP Session Metadata Pass-Through
+
+`nativeacp.Config` SHALL expose a `SessionMeta` hook and forward it verbatim to
+`acpdriver.Config.SessionMeta`, so a native binding can reach the ACP `_meta`
+channel the shared transport already sends on `session/new`, `session/load`, and
+`session/resume`. Without the forward, a binding can configure a metadata-based
+prompt channel that is silently never sent.
+
+The hook SHALL be a pass-through only: `nativeacp` SHALL NOT synthesize,
+inspect, or default the metadata.
+
+#### Scenario: Binding hook reaches the transport
+
+**GIVEN** a `nativeacp.Config` with a `SessionMeta` function
+**WHEN** the native ACP binding is built
+**THEN** `acpdriver.Config.SessionMeta` is that function's value unchanged
+
+#### Scenario: Bindings without a hook stay metadata-free
+
+**GIVEN** a `nativeacp.Config` with no `SessionMeta` function
+**WHEN** the native ACP binding is built
+**THEN** `acpdriver.Config.SessionMeta` is nil and no metadata is sent
 
 ---
 
@@ -219,4 +252,5 @@ The driver SHALL expose standard native ACP capabilities.
 ## Test Files
 
 - `backend/internal/adapters/chatdriver/grokacp/driver_test.go` — unit tests
+- `backend/internal/adapters/chatdriver/nativeacp/driver_test.go` — `SessionMeta` pass-through test
 - `backend/internal/adapters/chatdriver/registry/registry_test.go` — registration test update
