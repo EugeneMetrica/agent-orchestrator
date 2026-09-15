@@ -172,16 +172,21 @@ func runChatModelOverride(t *testing.T, harness, fixture string) {
 		t.Errorf("a fresh conversation already has model %q selected", catalog.Selected.Model)
 	}
 	// Pick something that is NOT the default, so the assertion cannot pass by
-	// accident when the choice is ignored.
-	var chosen string
+	// accident when the choice is ignored. Prefer the closest sibling of the
+	// default (shared id prefix): Grok's catalog leads with third-party and
+	// modality ids such as hy3 / grok-imagine-video that are advertised but
+	// often usage-capped or unsuitable for an agent turn, which turned this
+	// into a flake after ListModels started returning the full session catalog.
+	var defaultID string
 	for _, model := range catalog.Models {
 		if model.ID == "" || model.DisplayName == "" {
 			t.Errorf("model %+v is missing an id or a label, so it cannot be rendered", model)
 		}
-		if !model.Default && chosen == "" {
-			chosen = model.ID
+		if model.Default {
+			defaultID = model.ID
 		}
 	}
+	chosen := pickNonDefaultChatModel(catalog.Models, defaultID)
 	if chosen == "" {
 		t.Skip("provider offers only one model; nothing to switch to")
 	}
@@ -202,7 +207,10 @@ func runChatModelOverride(t *testing.T, harness, fixture string) {
 		func(s snapshot) bool { return terminal(s.Turns[len(s.Turns)-1].State) })
 	last := answered.Turns[len(answered.Turns)-1]
 	if last.State != "completed" {
-		t.Fatalf("turn on model %q ended as %q (err=%q)", chosen, last.State, last.ErrorMessage)
+		if rateLimitedConversation(answered) {
+			t.Skipf("provider rate-limited model %q (err=%q); cannot prove override", chosen, last.ErrorMessage)
+		}
+		t.Fatalf("turn on model %q ended as %q (err=%q)\n%s", chosen, last.State, last.ErrorMessage, describe(answered))
 	}
 	if !contains(answered.assistantText(), "MODEL_APPLIED") {
 		t.Errorf("the agent did not answer on the chosen model:\n%s", describe(answered))
@@ -413,13 +421,16 @@ func TestChatGrokServerStateConsistency(t *testing.T) {
 
 	settings := map[string]any{"approvalMode": "bypass-permissions"}
 	catalog := d.models(session)
-	var wantModel string
+	var defaultID string
 	for _, model := range catalog.Models {
-		if !model.Default {
-			wantModel = model.ID
-			settings["model"] = model.ID
+		if model.Default {
+			defaultID = model.ID
 			break
 		}
+	}
+	wantModel := pickNonDefaultChatModel(catalog.Models, defaultID)
+	if wantModel != "" {
+		settings["model"] = wantModel
 	}
 	setTurnSettings(t, d, session, settings)
 
@@ -497,4 +508,83 @@ func TestChatGrokServerStateConsistency(t *testing.T) {
 	if tools == 0 {
 		t.Errorf("no tool activity recorded for a turn that had to read the repo:\n%s", describe(snap))
 	}
+}
+
+// pickNonDefaultChatModel chooses a non-default model suitable for proving that
+// a settings PATCH actually changes the next turn. Prefer the id that shares the
+// longest prefix with the provider default (grok-4.6 → grok-4.5), and skip
+// obvious non-agent modality / free-tier entries that Grok still lists in the
+// session catalog.
+func pickNonDefaultChatModel(models []modelChoice, defaultID string) string {
+	var fallback string
+	best, bestScore := "", -1
+	for _, model := range models {
+		if model.Default || model.ID == "" {
+			continue
+		}
+		if fallback == "" {
+			fallback = model.ID
+		}
+		if !likelyAgentChatModel(model.ID) {
+			continue
+		}
+		// Prefer a longer shared prefix; among ties, prefer a shorter id so
+		// grok-4.6 → grok-4.5 rather than grok-4.20-0309-non-reasoning.
+		score := sharedModelPrefixLen(defaultID, model.ID)*1000 - len(model.ID)
+		if score > bestScore {
+			bestScore, best = score, model.ID
+		}
+	}
+	if best != "" {
+		return best
+	}
+	return fallback
+}
+
+func likelyAgentChatModel(id string) bool {
+	lower := strings.ToLower(id)
+	for _, marker := range []string{
+		"imagine", "voice", "tts", "stt", "video", "image", ":free",
+	} {
+		if strings.Contains(lower, marker) {
+			return false
+		}
+	}
+	return true
+}
+
+func sharedModelPrefixLen(a, b string) int {
+	n := len(a)
+	if len(b) < n {
+		n = len(b)
+	}
+	for i := 0; i < n; i++ {
+		if a[i] != b[i] {
+			return i
+		}
+	}
+	return n
+}
+
+func rateLimitedConversation(s snapshot) bool {
+	for _, a := range s.Activities {
+		if a.Kind != "error" {
+			continue
+		}
+		body := strings.ToLower(a.Summary + " " + string(a.DetailJSON))
+		if strings.Contains(body, "rate limited") ||
+			strings.Contains(body, "usage limit") ||
+			strings.Contains(body, "429") {
+			return true
+		}
+	}
+	for _, turn := range s.Turns {
+		body := strings.ToLower(turn.ErrorMessage)
+		if strings.Contains(body, "rate limited") ||
+			strings.Contains(body, "usage limit") ||
+			strings.Contains(body, "429") {
+			return true
+		}
+	}
+	return false
 }

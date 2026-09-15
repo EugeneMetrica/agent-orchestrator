@@ -619,10 +619,18 @@ func (c *conversation) finishPrompt(
 	c.mu.Lock()
 	c.terminalEventID = eventID
 	c.mu.Unlock()
-	c.emit(ports.ChatEvent{
+	completed := ports.ChatEvent{
 		Kind: ports.ChatEventTurnCompleted, ProviderEventID: eventID,
 		ProviderTurnID: turnID, TurnState: state,
-	})
+	}
+	// ChatEventError already surfaces the failure as an activity; the turn row
+	// still needs the same explanation or GET .../conversation shows failed
+	// with an empty errorMessage (the Grok rate-limit case: activity says
+	// "Rate limited", turn.err is blank).
+	if state == domain.TurnStateFailed && err != nil {
+		completed.Err = err
+	}
+	c.emit(completed)
 	c.emit(ports.ChatEvent{Kind: ports.ChatEventControllerState, ControllerState: ports.ChatControllerReady})
 
 	c.mu.Lock()

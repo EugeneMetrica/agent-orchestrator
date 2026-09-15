@@ -2356,6 +2356,9 @@ func TestACPDriverMapsCostRateLimitsAndAuthRecovery(t *testing.T) {
 			if event.TurnState != domain.TurnStateFailed {
 				t.Fatalf("turn state = %q", event.TurnState)
 			}
+			if event.Err == nil {
+				t.Fatal("failed turn completion carried no Err; conversation ErrorMessage would be blank")
+			}
 			break
 		}
 	}
