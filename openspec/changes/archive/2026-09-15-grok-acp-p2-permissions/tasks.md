@@ -5,6 +5,21 @@
 Live permission matrix test validating all four AO permission modes work
 correctly with Grok ACP.
 
+## Status
+
+Complete. Merged as [#5](https://github.com/EugeneMetrica/agent-orchestrator/pull/5)
+with every CI check green (G2). The gated run is:
+
+```bash
+AO_LIVE_GROK_ACP=1 go test -v -run PermissionModes ./internal/adapters/chatdriver/grokacp/
+```
+
+Its G3 result was not recorded in this repository at merge time, and the later
+P4b UI run does not stand in for it: those scenarios never change approval mode,
+so the four-mode matrix is still the only coverage of this phase's subject. The
+mid-session override path it depends on is exercised by P4a's approval-override
+scenario.
+
 ---
 
 ## Task 2.1: Implement TestLiveGrokACPPermissionModes
@@ -106,13 +121,13 @@ Manual verification:
 - [ ] Review note created at `reviews/g1-review.md`
 - [ ] Review verdict: PASS or FAIL with rationale
 
-### G2: Full CI Suite
-- [ ] `gofmt -l .` returns no files
-- [ ] `go build ./...` succeeds
-- [ ] `go vet ./...` passes
-- [ ] `go test ./...` passes (live tests skip)
-- [ ] `go test -race ./...` passes
-- [ ] `mise run lint` passes (golangci-lint v2.13.2)
+### G2: Full CI Suite — green on the merged head
+- [x] `gofmt -l .` returns no files
+- [x] `go build ./...` succeeds
+- [x] `go vet ./...` passes
+- [x] `go test ./...` passes (live tests skip)
+- [x] `go test -race ./...` passes
+- [x] `mise run lint` passes (pinned golangci-lint)
 
 ### G3: Live Permission Matrix
 - [ ] `AO_LIVE_GROK_ACP=1` set

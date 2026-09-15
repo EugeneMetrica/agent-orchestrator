@@ -6,6 +6,31 @@ This document describes the Playwright E2E test design for validating the
 frontend↔engine contract through real UI interaction, with Claude Code as the
 reference implementation for parity verification.
 
+## As built
+
+The code sketches below are the original design sketch. Three things resolved
+differently once the scenarios ran against a real daemon; the spec delta carries
+the corrected text, and the sketches are kept as written for the record.
+
+1. **A provider model catalog, not `settings.model`.** Grok and Claude Code both
+   advertise a `model` config option, so the composer writes
+   `PATCH /conversation/config-options/{id}` and the engine records the choice as
+   that option's `currentValue`. `settings.model` is the native-catalog path and
+   is never written for these two harnesses, so the sketch's
+   `expect(state.settings.model)` would fail on a model switch that did apply.
+   Every scenario resolves the live catalog from the daemon first and asserts
+   against the field that catalog writes. Effort follows the same split
+   (`thought_level` option versus `settings.reasoningEffort`).
+2. **The daemon names staged attachments.** The path is
+   `.ao/attachments/attachment-*.<ext>`, not the uploaded file name, so the
+   assertion reads the staged path AO recorded in the user message rather than
+   `.ao/attachments/test-upload.txt`.
+3. **One shared scenario body, not a harness matrix.** The scenarios live in
+   `frontend/e2e/support/live-chat-scenarios.ts` and both specs call them, which
+   is the same split `backend/e2e/chat_reference_test.go` uses. A `for` loop over
+   a harness list, as sketched, would put both providers' gates in one file and
+   make a Grok failure indistinguishable from a surface that never worked.
+
 ## Test Architecture
 
 ```
@@ -36,22 +61,41 @@ reference implementation for parity verification.
 
 ## Claude Code via ai.metrica.pro Router
 
-For reference tests, Claude Code uses ai.metrica.pro as a custom router:
+For reference tests, Claude Code runs against the Anthropic-compatible gateway
+at ai.metrica.pro, with the GLM 5.3 family as its primary model mapping. This is
+the canonical Claude Code configuration on this stack, so a reference run should
+go through it.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│  Claude Code with Custom Router                                      │
+│  Claude Code on the ai.metrica.pro gateway                           │
 │                                                                      │
-│  Environment:                                                        │
+│  Claude Code's own environment (AO configures none of this):         │
+│    ANTHROPIC_BASE_URL=https://ai.metrica.pro/v1                     │
+│    ANTHROPIC_AUTH_TOKEN=<gateway key>                               │
+│    ANTHROPIC_DEFAULT_OPUS_MODEL=glm-5.3                             │
+│    ANTHROPIC_DEFAULT_SONNET_MODEL=glm-5.3-flash                     │
+│                                                                      │
+│  The suite's own variable:                                           │
 │    CLAUDE_ROUTER_URL=https://ai.metrica.pro/v1                      │
-│    CLAUDE_MODEL_ALIAS=claude-sonnet → metrica/claude-sonnet-cached  │
+│      the operator's statement that the above was configured, so an   │
+│      unconfigured machine skips instead of passing as G4             │
 │                                                                      │
 │  Purpose:                                                            │
-│    - Model alias substitution for cost/routing optimization         │
 │    - Reference implementation for Grok parity tests                 │
-│    - Proves AO surfaces work correctly for production Claude setup  │
+│    - Proves AO surfaces work for the Claude setup actually in use   │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+
+The gateway speaks the Anthropic wire protocol, which is what Claude Code and
+AO's `claudeacp` binding both talk, so nothing in AO needs to know which models
+sit behind it. Z.ai documents the operator procedure for this mapping
+(https://docs.z.ai/devpack/tool/claude), whose direct Anthropic-protocol
+endpoint is `https://api.z.ai/api/anthropic`; the `ai.metrica.pro` gateway
+fronts the same protocol. AO does already name this class of route on its own:
+the Claude hook route hint maps `api.z.ai` to the `zai` billing provider
+(`backend/internal/cli/hooks.go`), and `pricing/catalog/v1/providers/zai` prices
+`glm-5.3` and `glm-5.3-flash`.
 
 ## Test Implementation
 
@@ -208,7 +252,8 @@ for (const harness of harnesses) {
 
 ```bash
 export AO_LIVE_GROK_ACP=1
-# Requires: grok CLI installed, XAI credentials configured
+export AO_E2E_LIVE_PROJECT=<projectId>   # project the sessions spawn in
+# Requires: grok CLI installed, XAI credentials configured, a running daemon
 
 cd frontend
 npx playwright test chat-grok-e2e.spec.ts
@@ -219,11 +264,17 @@ npx playwright test chat-grok-e2e.spec.ts
 ```bash
 export AO_LIVE_CLAUDE_ACP=1
 export CLAUDE_ROUTER_URL=https://ai.metrica.pro/v1
-# Requires: claude CLI, Anthropic credentials, router access
+export AO_E2E_LIVE_PROJECT=<projectId>
+# Requires: claude CLI configured against the gateway (ANTHROPIC_BASE_URL plus
+# the ANTHROPIC_DEFAULT_*_MODEL mapping above), and a running daemon
 
 cd frontend
 npx playwright test chat-reference-e2e.spec.ts
 ```
+
+The project named by `AO_E2E_LIVE_PROJECT` needs a resolvable default branch.
+A project still reporting `auto` fails at spawn, before any UI assertion runs;
+setting its `defaultBranch` to `main` is what the G3/G4 runs needed.
 
 ## Parity Verification
 

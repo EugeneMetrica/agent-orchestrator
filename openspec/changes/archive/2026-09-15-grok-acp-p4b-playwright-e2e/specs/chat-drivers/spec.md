@@ -26,22 +26,36 @@ The UI SHALL allow selecting Grok harness when creating a new task.
 
 The UI model selector SHALL apply model changes to the engine session.
 
+The engine records the choice in whichever catalog the live session advertises,
+and an assertion SHALL read the field that catalog writes:
+
+- **provider catalog** — the ACP agent advertises a `model` config option, so
+  the UI writes `PATCH /conversation/config-options/{id}` and the engine records
+  the choice as that option's `currentValue` in
+  `GET /conversation/config-options`. Grok and Claude Code both take this path.
+- **native catalog** — no provider model option, so the UI writes
+  `PATCH /conversation/settings` and the engine records `settings.model`, which
+  `GET /conversation` reports.
+
+Asserting `settings.model` unconditionally would fail on every ACP harness for a
+model switch that did apply.
+
 #### Scenario: Model dropdown changes engine model
 
 **GIVEN** an active Grok Chat session in the UI
 **WHEN** the user clicks the model dropdown
-**AND** selects "grok-4.5"
+**AND** selects a second model the live session advertises
 **THEN** the UI shows the selected model
-**AND** the next turn uses model "grok-4.5"
-**AND** GET /conversation shows `settings.model == "grok-4.5"`
+**AND** the engine records it in the catalog that owns the choice
+**AND** the next turn completes on the selected model
 
 #### Scenario: Model switch not ignored (regression prevention)
 
-**GIVEN** an active session with model "xai/grok-2"
-**WHEN** user switches model to "grok-4.5" via UI
+**GIVEN** an active session on its default model
+**WHEN** the user switches to a different advertised model via UI
 **AND** sends a new message
-**THEN** the engine processes with "grok-4.5"
-**AND** the conversation state reflects the new model
+**THEN** the engine processes the turn on the newly selected model
+**AND** the recorded state still reports it after the turn settles
 **AND** the change is NOT silently ignored
 
 ---
@@ -50,13 +64,20 @@ The UI model selector SHALL apply model changes to the engine session.
 
 The UI reasoning effort selector SHALL propagate to the engine.
 
+Effort follows the same two catalogs as the model: a provider `thought_level`
+(or `effort`) config option records the choice as that option's `currentValue`,
+while a native effort list belongs to a model and records
+`settings.reasoningEffort`. When nothing advertises efforts the composer renders
+no effort control, and the scenario SHALL skip rather than assert an invented
+one.
+
 #### Scenario: Effort selector changes engine setting
 
 **GIVEN** an active Grok Chat session in the UI
-**WHEN** the user opens settings/configuration panel
-**AND** sets reasoning effort to "high"
-**THEN** the UI shows effort as "high"
-**AND** GET /conversation shows `settings.reasoningEffort == "high"`
+**WHEN** the user opens the composer's turn-settings menu
+**AND** sets reasoning effort to a non-default advertised value
+**THEN** the UI shows the selected effort
+**AND** the engine records it in the catalog that owns the choice
 
 ---
 
@@ -64,23 +85,20 @@ The UI reasoning effort selector SHALL propagate to the engine.
 
 Files attached via UI SHALL be delivered to the session worktree.
 
-#### Scenario: Drag-drop file appears in worktree
+The daemon names staged files itself, so the path is
+`<workspace>/.ao/attachments/attachment-*.<ext>` rather than the uploaded file
+name. An assertion SHALL read the staged path AO recorded in the user message
+instead of reconstructing one from the upload.
+
+#### Scenario: File picker upload appears in worktree
 
 **GIVEN** an active Grok Chat session
-**WHEN** the user drags a file "test-upload.txt" to the chat input
-**AND** sends a message referencing it
-**THEN** the file exists at `<workspace>/.ao/attachments/test-upload.txt`
-**AND** the agent can read the file
-**AND** the agent response references the file content
-
-#### Scenario: File picker upload
-
-**GIVEN** an active Grok Chat session
-**WHEN** the user clicks the attachment button
-**AND** selects a file via the picker
-**AND** sends the message
-**THEN** the file is uploaded and visible in worktree
-**AND** appears in the message content
+**WHEN** the user attaches "test-upload.txt" through the composer's file input
+**AND** sends a message asking the agent to read it
+**THEN** the recorded user message carries a staged path under `.ao/attachments/`
+**AND** the bytes at that path in the worktree are the uploaded bytes
+**AND** the agent reports the file's contents in its answer
+**AND** the staged path is visible in the timeline
 
 ---
 
@@ -129,13 +147,22 @@ Grok UI behavior SHALL match Claude Code reference implementation.
 **AND** worktree file outcomes match
 **AND** model/settings UI reflects same state patterns
 
-#### Scenario: Claude Code via ai.metrica.pro router
+#### Scenario: Claude Code on its ai.metrica.pro primary-model mapping
 
-**GIVEN** Claude Code configured with ai.metrica.pro as model router
-**WHEN** running the reference test suite
-**THEN** Claude Code uses the custom router for model resolution
-**AND** model alias substitution works correctly
-**AND** tests pass as reference implementation
+The reference environment runs Claude Code against the Anthropic-compatible
+gateway at `https://ai.metrica.pro/v1`, with the GLM 5.3 family as its primary
+model mapping (`ANTHROPIC_DEFAULT_OPUS_MODEL=glm-5.3`,
+`ANTHROPIC_DEFAULT_SONNET_MODEL=glm-5.3-flash`). That is the canonical Claude
+Code configuration on this stack, not a fallback: the operator procedure is
+documented upstream by Z.ai (https://docs.z.ai/devpack/tool/claude), the
+Anthropic wire protocol is what Claude Code and AO's ACP binding speak, and AO
+already names this route (`api.z.ai` → `zai` in `claudeHookProviderHint`) and
+prices `glm-5.3` and `glm-5.3-flash` in `pricing/catalog/v1/providers/zai`.
+
+**GIVEN** Claude Code configured against the gateway with that model mapping
+**WHEN** the reference suite runs
+**THEN** the reference scenarios complete on the gateway's models
+**AND** the outcomes stand as the reference for the Grok scenarios
 
 ---
 
@@ -150,7 +177,15 @@ Grok UI behavior SHALL match Claude Code reference implementation.
 |----------|---------|
 | `AO_LIVE_GROK_ACP` | Enable live Grok tests |
 | `AO_LIVE_CLAUDE_ACP` | Enable Claude Code reference tests |
-| `CLAUDE_ROUTER_URL` | ai.metrica.pro router URL for Claude Code |
+| `CLAUDE_ROUTER_URL` | The reference gateway the operator configured Claude Code against |
+| `AO_E2E_LIVE_PROJECT` | Daemon project id the sessions spawn in |
+
+The gateway itself is configured in the operator's own Claude Code installation,
+not by AO: `ANTHROPIC_BASE_URL=https://ai.metrica.pro/v1` with
+`ANTHROPIC_DEFAULT_OPUS_MODEL=glm-5.3` and
+`ANTHROPIC_DEFAULT_SONNET_MODEL=glm-5.3-flash`. `CLAUDE_ROUTER_URL` is the
+operator's statement that this was done, which the spec requires so an
+unconfigured machine skips instead of passing as G4.
 
 ## Test Functions
 
@@ -165,7 +200,9 @@ test("workspace panel matches worktree", ...)
 
 // Claude Code reference tests
 test("reference: model switch from UI applies to engine", ...)
+test("reference: reasoning effort propagates from UI", ...)
 test("reference: file attachment delivered to worktree", ...)
+test("reference: timeline shows tool activities", ...)
 ```
 
 ## Guarantees Encoded as WHEN/THEN
@@ -181,8 +218,8 @@ These are the critical guarantees Eugene requested:
 **THEN** the engine receives the setting (visible in API state)
 
 ### G-FILES: UI Files Delivered
-**WHEN** files are chosen in UI (drag-drop or picker)
-**THEN** files exist in engine cwd/worktree
+**WHEN** files are chosen in UI through the composer's file input
+**THEN** the staged files exist in the engine cwd/worktree
 **AND** are visible to the agent during task execution
 
 ### G-PARITY: Grok Matches Claude Reference

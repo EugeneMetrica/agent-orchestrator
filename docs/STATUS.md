@@ -128,7 +128,57 @@ surface (`npm run sqlc`, `npm run api`).
 - OpenAPI spec generated from Go DTOs; frontend TS types generated from it and
   drift-checked in CI.
 
+#### Claude Code (model routing and reference role)
+
+Full harness notes — install, PATH resolution, auth signals, and the routing
+details below — are in
+[the Claude Code harness doc](harnesses/claude-code.md).
+
+- **Route ownership**: Claude Code speaks the Anthropic Messages protocol, and
+  that protocol is the contract AO's binding depends on. Where those requests go
+  belongs to the operator's Claude Code installation; AO configures no route and
+  forwards the project environment through unchanged.
+- **Standing reference configuration**: AO's live Claude Code runs — the G4
+  parity reference today, and the assumed pattern for future live Claude runs —
+  use the Anthropic-compatible gateway at `https://ai.metrica.pro/v1` with the
+  GLM 5.3 family mapped onto Claude Code's aliases:
+
+  ```json
+  {
+    "env": {
+      "ANTHROPIC_BASE_URL": "https://ai.metrica.pro/v1",
+      "ANTHROPIC_AUTH_TOKEN": "<gateway key>",
+      "ANTHROPIC_DEFAULT_OPUS_MODEL": "glm-5.3",
+      "ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-5.3-flash"
+    }
+  }
+  ```
+
+  The operator procedure this follows is
+  [Z.ai's Claude Code guide](https://docs.z.ai/devpack/tool/claude), whose
+  direct Anthropic-protocol endpoint is `https://api.z.ai/api/anthropic`; the
+  variables are Claude Code's own
+  ([model configuration](https://code.claude.com/docs/en/model-config)). It is
+  therefore a supported configuration rather than a substitution for one test
+  session, and AO already names this class of route (`api.z.ai` → the `zai`
+  billing provider in `claudeHookProviderHint`) and prices both `glm-5.3` and
+  `glm-5.3-flash` in `pricing/catalog/v1/providers/zai`. A gateway host AO
+  cannot name is recorded as `unidentified`, which affects cost attribution only
+  and not the harness contract.
+- **Reference role**: a new Chat binding's live scenarios run against Claude
+  Code from the same shared scenario bodies, which is what separates "the new
+  binding is broken" from "this AO surface never worked for any ACP harness".
+  Gates: `AO_CHAT_E2E=1 AO_LIVE_CLAUDE_ACP=1 go test ./e2e/ -run ChatReference`
+  and, for the UI, `AO_LIVE_CLAUDE_ACP=1
+  CLAUDE_ROUTER_URL=https://ai.metrica.pro/v1 npx playwright test
+  chat-reference-e2e`. `CLAUDE_ROUTER_URL` is never read by AO; it is the
+  operator's statement that the gateway was configured, so an unconfigured
+  machine skips instead of passing as a reference run.
+
 #### Grok (xAI Grok Build)
+
+Full harness notes — install, PATH resolution, modes, permission mapping, and
+the live gates — are in [the Grok harness doc](harnesses/grok.md).
 
 - **Status**: Chat mode available.
 - **Transport**: native ACP via `grok --no-auto-update agent stdio`.
@@ -157,12 +207,30 @@ surface (`npm run sqlc`, `npm run api`).
   reasoning-effort menus, an attachment uploaded through the file picker, the
   timeline's tool rows, and the workspace panel — against a real daemon, then
   asserts the outcome on server state and the worktree rather than on the UI
-  label alone (`frontend/e2e/chat-grok-e2e.spec.ts`). The critical scenarios run
+  label alone   (`frontend/e2e/chat-grok-e2e.spec.ts`). The critical scenarios run
   against Claude Code as a parity reference under `AO_LIVE_CLAUDE_ACP=1` with
   `CLAUDE_ROUTER_URL=https://ai.metrica.pro/v1`
   (`frontend/e2e/chat-reference-e2e.spec.ts`). Both are skipped, with the missing
   prerequisite as the reason, on an ungated `npx playwright test`; the bootstrap
   they need is documented in `frontend/e2e/support/live-daemon.ts`.
+- **Live UI evidence (2026-09-15)**: both Playwright gates ran on a box with
+  the provider CLIs installed.
+  `AO_LIVE_GROK_ACP=1 AO_E2E_LIVE_PROJECT=<projectId> npx playwright test chat-grok-e2e`
+  → **6/6 passed**, so the model and effort menus were both exercised on live
+  catalogs rather than skipped for want of a second choice.
+  `AO_LIVE_CLAUDE_ACP=1 CLAUDE_ROUTER_URL=https://ai.metrica.pro/v1 AO_E2E_LIVE_PROJECT=<projectId> npx playwright test chat-reference-e2e`
+  → **4/4 passed**. The run also surfaced a fixture prerequisite: the project
+  named by `AO_E2E_LIVE_PROJECT` needs a resolvable default branch, because one
+  still reporting `auto` fails at session spawn before any UI assertion runs.
+- **What the reference run establishes**: the reference harness is Claude Code
+  driven through AO's `claudeacp` binding, on the standing reference
+  configuration described under
+  [Claude Code](#claude-code-model-routing-and-reference-role) — the GLM 5.3
+  family over the Anthropic-compatible gateway. The parity claim is therefore
+  about the harness contract, which is what the Anthropic wire protocol carries
+  and what both runs exercised; it is not a claim that the two harnesses produce
+  identical prose. Scope and method:
+  [the parity note](research/grok-claude-parity-p4b.md).
 
 ### Frontend (Electron + React)
 
