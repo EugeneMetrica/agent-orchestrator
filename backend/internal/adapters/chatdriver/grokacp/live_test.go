@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -65,6 +66,96 @@ func TestLiveGrokACP(t *testing.T) {
 	proof, err := os.ReadFile(filepath.Join(workspace, "proof.txt"))
 	if err != nil || string(proof) != "grok-acp-ok" {
 		t.Fatalf("tool-created proof = %q, %v", proof, err)
+	}
+}
+
+// Resume must recover the provider's own conversation, not just reopen a
+// process against the same workspace. The test proves both halves of that:
+// Grok has to recall a codeword it was told only in the pre-terminate session
+// (provider-side history), and the file that turn wrote has to still be on disk
+// and visible to the resumed agent (workspace continuity). AO's standing
+// instructions are changed between the two phases so the resumed answer also
+// proves the shared ACP transport re-sent `_meta.rules` on session restore
+// rather than leaving the resumed session with the original prompt.
+func TestLiveGrokACPResume(t *testing.T) {
+	if os.Getenv("AO_LIVE_GROK_ACP") != "1" {
+		t.Skip("set AO_LIVE_GROK_ACP=1 to run against the local Grok account")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	driver := New(grok.New(), nil)
+	if _, err := driver.Probe(ctx); err != nil {
+		t.Fatalf("Probe: %v", err)
+	}
+
+	workspace := t.TempDir()
+	dataDir := liveDataDir(t)
+	const sessionID = domain.SessionID("live-grok-resume")
+	conv, err := driver.Start(ctx, ports.ChatStartConfig{
+		SessionID: sessionID, DataDir: dataDir, WorkspacePath: workspace,
+		Env: liveEnvMap(), Permissions: ports.PermissionModeDefault,
+		SystemPrompt: "On every response include the exact token GROK_STANDING_START.",
+	})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	providerID := conv.ProviderConversationID()
+	if providerID == "" || !conv.Capabilities()[ports.ChatCapabilityResume] {
+		t.Fatalf("provider id/resume = %q, %#v", providerID, conv.Capabilities())
+	}
+
+	// The codeword carries a random suffix so a resumed answer can only contain
+	// it by recalling this session; a fixed word like ALPHA could be guessed or
+	// echoed from the model's own priors and would pass without real history.
+	codeword := "ALPHA-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+	startRef := sendLiveTurn(ctx, t, conv,
+		"Remember the codeword "+codeword+". Use the shell to run "+
+			"`printf before-value > before.txt`, then report success.")
+	startAnswer := waitForLiveTurn(ctx, t, conv, startRef.ProviderTurnID, true)
+	if !strings.Contains(startAnswer, "GROK_STANDING_START") {
+		t.Fatalf("start answer omitted the standing instruction token: %q", startAnswer)
+	}
+	before, err := os.ReadFile(filepath.Join(workspace, "before.txt"))
+	if err != nil || string(before) != "before-value" {
+		t.Fatalf("pre-terminate proof = %q, %v", before, err)
+	}
+
+	if err := conv.(ports.ChatProviderTerminator).Terminate(); err != nil {
+		t.Fatalf("Terminate: %v", err)
+	}
+
+	resumed, err := driver.Resume(ctx, ports.ChatResumeConfig{
+		SessionID: sessionID, ProviderConversationID: providerID,
+		DataDir: dataDir, WorkspacePath: workspace, Env: liveEnvMap(),
+		Permissions:  ports.PermissionModeDefault,
+		SystemPrompt: "On every response include the exact token GROK_STANDING_RESUME.",
+	})
+	if err != nil {
+		t.Fatalf("Resume: %v", err)
+	}
+	defer resumed.(ports.ChatProviderTerminator).Terminate()
+	if got := resumed.ProviderConversationID(); got != providerID {
+		t.Fatalf("resumed provider id = %q, want %q", got, providerID)
+	}
+
+	resumeRef := sendLiveTurn(ctx, t, resumed,
+		"Repeat the codeword I gave you earlier and read before.txt to confirm it "+
+			"still exists. Do not modify any files.")
+	resumeAnswer := waitForLiveTurn(ctx, t, resumed, resumeRef.ProviderTurnID, true)
+	if !strings.Contains(resumeAnswer, codeword) {
+		t.Fatalf("resumed answer lost pre-terminate history (codeword %q): %q", codeword, resumeAnswer)
+	}
+	if !strings.Contains(resumeAnswer, "GROK_STANDING_RESUME") {
+		t.Fatalf("resumed answer omitted the resume standing instruction token: %q", resumeAnswer)
+	}
+	if !strings.Contains(resumeAnswer, "before.txt") {
+		t.Fatalf("resumed answer never referenced the pre-terminate file: %q", resumeAnswer)
+	}
+
+	after, err := os.ReadFile(filepath.Join(workspace, "before.txt"))
+	if err != nil || string(after) != string(before) {
+		t.Fatalf("proof after resume = %q, %v; want unchanged %q", after, err, before)
 	}
 }
 
