@@ -26,6 +26,49 @@ func (c *conversation) ListConfigOptions(ctx context.Context) ([]ports.ChatConfi
 	return cloneConfigOptions(c.configOptions), nil
 }
 
+// ListModels projects the provider's advertised model config option into the
+// catalog GET .../conversation/models expects. ACP agents advertise models as a
+// session config option — either modern configOptions or the legacy session/new
+// `models` field that AO already normalizes into configOptions. Without this
+// projection the chat Models endpoint treats every ACP driver as offering no
+// choice even when the live session carried a full catalog (the Grok case:
+// `grok models` and session/new both list dozens of ids, but ChatModelLister was
+// only implemented by the Codex driver).
+func (c *conversation) ListModels(ctx context.Context) ([]ports.ChatModel, error) {
+	options, err := c.ListConfigOptions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, option := range options {
+		if option.Type != ports.ChatConfigOptionSelect {
+			continue
+		}
+		if option.ID != "model" && option.Category != "model" {
+			continue
+		}
+		current := strings.TrimSpace(option.Current.Select)
+		models := make([]ports.ChatModel, 0, len(option.Choices))
+		for _, choice := range option.Choices {
+			id := strings.TrimSpace(choice.Value)
+			if id == "" {
+				continue
+			}
+			name := strings.TrimSpace(choice.Name)
+			if name == "" {
+				name = id
+			}
+			models = append(models, ports.ChatModel{
+				ID:          id,
+				DisplayName: name,
+				Description: strings.TrimSpace(choice.Description),
+				Default:     current != "" && id == current,
+			})
+		}
+		return models, nil
+	}
+	return nil, nil
+}
+
 // SetConfigOption applies exactly the type the provider advertised and replaces
 // the whole catalog from the response. A model switch can change the effort and
 // fast-mode options, so updating only the selected row would immediately make the
