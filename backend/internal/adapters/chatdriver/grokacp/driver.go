@@ -21,25 +21,23 @@ func New(plugin nativeacp.Plugin, log *slog.Logger) ports.ChatDriver {
 	return nativeacp.New(plugin, nativeacp.Config{
 		Harness:        domain.HarnessGrok,
 		Configure:      configure,
+		SessionMeta:    sessionMeta,
 		SessionMode:    sessionMode,
 		SessionOptions: sessionOptions,
 	}, log)
 }
 
-// configure builds `grok --no-auto-update [--rules <text>] agent
-// [--always-approve] [--model <model>] stdio`. The `agent` subcommand selects
-// ACP mode and `stdio` selects the JSON-RPC transport. `--no-auto-update` and
-// `--rules` are global flags and keep the TUI adapter's position ahead of the
-// subcommand, so an AO-managed session never self-updates mid-run and receives
-// AO's standing instructions the same way a TUI session does.
+// configure builds `grok --no-auto-update agent [--always-approve]
+// [--model <model>] stdio`. The `agent` subcommand selects ACP mode and `stdio`
+// selects the JSON-RPC transport. `--no-auto-update` is a global flag and keeps
+// the TUI adapter's position ahead of the subcommand, so an AO-managed session
+// never self-updates mid-run.
+//
+// Standing instructions are deliberately absent from the argv: `--rules` is
+// consumed by Grok's TUI and `-p` paths only, and `agent` mode ignores it. They
+// travel through sessionMeta instead.
 func configure(_ context.Context, cfg acpdriver.LaunchConfig) ([]string, map[string]string, error) {
-	args := []string{"--no-auto-update"}
-	// Grok appends --rules to its own system prompt rather than replacing it,
-	// which is why AO passes standing instructions through this flag.
-	if prompt := strings.TrimSpace(cfg.SystemPrompt); prompt != "" {
-		args = append(args, "--rules", prompt)
-	}
-	args = append(args, "agent")
+	args := []string{"--no-auto-update", "agent"}
 	if ports.NormalizePermissionMode(cfg.Permissions) == ports.PermissionModeBypassPermissions {
 		args = append(args, "--always-approve")
 	}
@@ -47,6 +45,20 @@ func configure(_ context.Context, cfg acpdriver.LaunchConfig) ([]string, map[str
 		args = append(args, "--model", model)
 	}
 	return append(args, "stdio"), nil, nil
+}
+
+// sessionMeta delivers AO's standing instructions through the ACP session
+// metadata Grok's agent mode reads. Grok folds `_meta.rules` into the
+// `<human_rules>` section of its own system prompt, so AO's instructions are
+// appended to — never a replacement for — what the user's installation
+// configures. The shared transport repeats this metadata on session/load and
+// session/resume, so a recovered conversation keeps the same standing context.
+func sessionMeta(cfg acpdriver.LaunchConfig) map[string]any {
+	prompt := strings.TrimSpace(cfg.SystemPrompt)
+	if prompt == "" {
+		return nil
+	}
+	return map[string]any{"rules": prompt}
 }
 
 // sessionMode maps AO's approval vocabulary onto Grok's own mode ids, which are

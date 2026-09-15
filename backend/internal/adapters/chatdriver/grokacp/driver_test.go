@@ -50,26 +50,21 @@ func TestConfigureSpawnsGrokACPStdio(t *testing.T) {
 			want: []string{"--no-auto-update", "agent", "stdio"},
 		},
 		{
-			name: "standing instructions ride the global --rules flag",
+			name: "standing instructions stay off the argv",
 			cfg:  acpdriver.LaunchConfig{SystemPrompt: "ao standing instructions"},
-			want: []string{"--no-auto-update", "--rules", "ao standing instructions", "agent", "stdio"},
+			want: []string{"--no-auto-update", "agent", "stdio"},
 		},
 		{
-			name: "standing instructions combine with permissions and model",
+			name: "standing instructions do not disturb permissions and model",
 			cfg: acpdriver.LaunchConfig{
 				SystemPrompt: "ao standing instructions",
 				Model:        "grok-code-fast",
 				Permissions:  ports.PermissionModeBypassPermissions,
 			},
 			want: []string{
-				"--no-auto-update", "--rules", "ao standing instructions",
-				"agent", "--always-approve", "--model", "grok-code-fast", "stdio",
+				"--no-auto-update", "agent", "--always-approve",
+				"--model", "grok-code-fast", "stdio",
 			},
-		},
-		{
-			name: "blank standing instructions add no rules flag",
-			cfg:  acpdriver.LaunchConfig{SystemPrompt: "  \n "},
-			want: []string{"--no-auto-update", "agent", "stdio"},
 		},
 	}
 	for _, tt := range tests {
@@ -101,46 +96,47 @@ func TestConfigureAddsNoEnvironmentOverlay(t *testing.T) {
 	}
 }
 
-// Chat delivers AO's standing instructions exactly like the TUI adapter does:
-// `--rules` appends to whatever system prompt the user's own Grok installation
-// configures, so AO never overrides it.
-func TestConfigureAppendsStandingInstructionsAsRules(t *testing.T) {
-	args, _, err := configure(context.Background(), acpdriver.LaunchConfig{
-		SystemPrompt: "ao standing instructions",
-		Permissions:  ports.PermissionModeBypassPermissions,
-	})
-	if err != nil {
-		t.Fatalf("configure: %v", err)
-	}
-	rules := indexOf(args, "--rules")
-	if rules < 0 || rules+1 >= len(args) || args[rules+1] != "ao standing instructions" {
-		t.Fatalf("args = %#v, want --rules followed by the standing instructions", args)
-	}
-	if agent := indexOf(args, "agent"); agent < rules {
-		t.Fatalf("args = %#v, want --rules before the agent subcommand", args)
-	}
-	if strings.Contains(strings.Join(args, " "), "system-prompt-override") {
-		t.Fatalf("args = %#v must append rules, not override Grok's system prompt", args)
-	}
-}
-
-func TestConfigureOmitsRulesWithoutStandingInstructions(t *testing.T) {
-	args, _, err := configure(context.Background(), acpdriver.LaunchConfig{Permissions: ports.PermissionModeAcceptEdits})
-	if err != nil {
-		t.Fatalf("configure: %v", err)
-	}
-	if indexOf(args, "--rules") >= 0 {
-		t.Fatalf("args = %#v, want no --rules flag for an empty system prompt", args)
-	}
-}
-
-func indexOf(args []string, want string) int {
-	for i, arg := range args {
-		if arg == want {
-			return i
+// `grok --rules` is read by the TUI and `-p` paths only; `grok agent stdio`
+// parses it and then ignores it. Putting it on the argv would look like
+// delivery while silently dropping AO's standing instructions, so the argv must
+// stay free of it regardless of how long or how blank the prompt is.
+func TestConfigureNeverPutsRulesOnArgv(t *testing.T) {
+	for _, prompt := range []string{"", "  \n ", "ao standing instructions"} {
+		args, _, err := configure(context.Background(), acpdriver.LaunchConfig{
+			SystemPrompt: prompt,
+			Permissions:  ports.PermissionModeBypassPermissions,
+		})
+		if err != nil {
+			t.Fatalf("configure(%q): %v", prompt, err)
+		}
+		joined := strings.Join(args, " ")
+		if strings.Contains(joined, "--rules") || strings.Contains(joined, "ao standing instructions") {
+			t.Fatalf("args for %q = %#v, want no argv-borne standing instructions", prompt, args)
 		}
 	}
-	return -1
+}
+
+// Grok's agent mode takes appended standing instructions through the ACP
+// session metadata key `rules`, which it folds into `<human_rules>` alongside
+// the system prompt the user's own installation configures.
+func TestSessionMetaDeliversStandingInstructionsAsRules(t *testing.T) {
+	meta := sessionMeta(acpdriver.LaunchConfig{SystemPrompt: "ao standing instructions"})
+	want := map[string]any{"rules": "ao standing instructions"}
+	if !reflect.DeepEqual(meta, want) {
+		t.Fatalf("session meta = %#v, want %#v", meta, want)
+	}
+}
+
+func TestSessionMetaTrimsAndOmitsBlankStandingInstructions(t *testing.T) {
+	if got := sessionMeta(acpdriver.LaunchConfig{SystemPrompt: " ao standing instructions \n"}); got["rules"] != "ao standing instructions" {
+		t.Fatalf("session meta = %#v, want trimmed rules", got)
+	}
+	for _, prompt := range []string{"", "  \n "} {
+		got := sessionMeta(acpdriver.LaunchConfig{SystemPrompt: prompt})
+		if got != nil {
+			t.Fatalf("session meta for %q = %#v, want nil so AO sends no rules key", prompt, got)
+		}
+	}
 }
 
 func TestSessionModeUsesGrokPermissionModeIDs(t *testing.T) {

@@ -133,6 +133,43 @@ func TestBindingMapsPluginDiscoveryAndAuth(t *testing.T) {
 	})
 }
 
+// Some native adapters accept standing context only through ACP session
+// metadata, so a binding's SessionMeta hook has to reach the shared transport
+// unchanged. Without the forward, a provider-side prompt channel is configured
+// here and silently never sent.
+func TestBindingForwardsSessionMetaToTransport(t *testing.T) {
+	t.Run("hook forwarded verbatim", func(t *testing.T) {
+		cfg := buildConfig(fakePlugin{binary: "/user/provider"}, Config{
+			Harness: domain.HarnessGrok,
+			Configure: func(context.Context, acpdriver.LaunchConfig) ([]string, map[string]string, error) {
+				return []string{"agent", "stdio"}, nil, nil
+			},
+			SessionMeta: func(in acpdriver.LaunchConfig) map[string]any {
+				return map[string]any{"rules": in.SystemPrompt}
+			},
+		}, nil)
+		if cfg.SessionMeta == nil {
+			t.Fatal("transport SessionMeta is nil; the binding's hook was dropped")
+		}
+		got := cfg.SessionMeta(acpdriver.LaunchConfig{SystemPrompt: "AO rules"})
+		if got["rules"] != "AO rules" {
+			t.Fatalf("session meta = %#v, want the binding's rules", got)
+		}
+	})
+
+	t.Run("bindings without a hook stay metadata-free", func(t *testing.T) {
+		cfg := buildConfig(fakePlugin{binary: "/user/provider"}, Config{
+			Harness: domain.HarnessOpenCode,
+			Configure: func(context.Context, acpdriver.LaunchConfig) ([]string, map[string]string, error) {
+				return []string{"acp"}, nil, nil
+			},
+		}, nil)
+		if cfg.SessionMeta != nil {
+			t.Fatal("transport SessionMeta is set for a binding that defines none")
+		}
+	})
+}
+
 func TestBindingReusesPluginRuntimeEnvironment(t *testing.T) {
 	plugin := &fakeAugmentingPlugin{fakePlugin: fakePlugin{
 		binary: "/user/provider", status: ports.AgentAuthStatusAuthorized,
