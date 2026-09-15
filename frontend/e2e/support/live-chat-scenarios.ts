@@ -357,8 +357,12 @@ export async function expectWorkspacePanelMatchesWorktree(
 	if (!(await inspector.isVisible())) {
 		await page.getByRole("button", { name: "Open inspector panel" }).click();
 	}
-	await inspector.getByRole("tab", { name: "Files" }).click();
 	const files = page.getByRole("region", { name: "Session files" });
+	if (!(await files.isVisible())) {
+		// The pane the tab opens has a "Files" tab of its own, so scope to the
+		// inspector's own tab bar, which precedes the pane it switches.
+		await inspector.getByRole("tab", { name: "Files" }).first().click();
+	}
 	await expect(files).toBeVisible({ timeout: UI_TIMEOUT_MS });
 	// The pane opens on Changes (GET /workspace/files, changed files only) and
 	// offers an all-files tree beside it. A new untracked file should appear in
@@ -426,6 +430,7 @@ async function chooseTurnSetting(page: Page, pick: TurnSettingPick): Promise<voi
 	const settings = page.getByRole("group", { name: "Turn settings" });
 	await expect(settings).toBeVisible({ timeout: UI_TIMEOUT_MS });
 	const grouped = page.getByRole("button", { name: "Model and reasoning effort for the next turn" });
+	let trigger = grouped;
 	if (await grouped.count()) {
 		await grouped.click();
 		// partitionConfigOptions keeps model and effort at the top level of this
@@ -439,12 +444,26 @@ async function chooseTurnSetting(page: Page, pick: TurnSettingPick): Promise<voi
 		).toBeVisible({ timeout: UI_TIMEOUT_MS });
 		await submenu.first().click();
 	} else {
-		await settings
+		trigger = settings
 			.getByRole("button", { name: startsWith(pick.standaloneName ?? pick.submenu) })
-			.first()
-			.click();
+			.first();
+		await trigger.click();
 	}
 	await page.getByRole("menuitemradio", { name: pick.choice }).first().click();
+
+	// The trigger relabels itself from the value now in force, so this is the
+	// user-visible half of the change. A provider that answered an earlier turn on
+	// a substituted model labels itself with the substitution instead and flags it,
+	// which is the composer working as designed, not a dropped selection — the
+	// engine-state assertion each caller makes next is what settles that.
+	const substituted = settings.getByLabel(/^Substituted for /);
+	await expect
+		.poll(
+			async () =>
+				(await substituted.count()) > 0 || ((await trigger.first().innerText()).includes(pick.choice)),
+			{ message: `the turn-settings trigger never showed "${pick.choice}"`, timeout: UI_TIMEOUT_MS },
+		)
+		.toBe(true);
 }
 
 /**
