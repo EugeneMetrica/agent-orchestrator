@@ -72,15 +72,33 @@ The driver SHALL make conversation history available after resume.
 
 ---
 
-### Requirement: Standing Instructions Apply on Resume
+### Requirement: Standing Instructions Survive Resume
 
-The driver SHALL support different standing instructions on resume.
+The driver SHALL keep AO's standing instructions in force on a resumed
+conversation, and SHALL keep sending them as ACP session metadata on
+`session/load`.
 
-#### Scenario: Resume standing instruction token
+Grok reads `_meta.rules` when it creates a session and keeps the rules that
+session was created with when it reloads one, so resume preserves standing
+instructions but does not update them. AO re-sends them for protocol
+correctness and forward compatibility, and MUST NOT treat `session/load` as a
+way to rewrite Grok's standing rules.
 
-**GIVEN** a resumed conversation with `SystemPrompt = "Include RESUME_TOKEN in responses"`
+#### Scenario: Standing instruction token present after resume
+
+**GIVEN** a conversation started with `SystemPrompt = "Include START_TOKEN in responses"`
+**AND** the conversation was terminated and resumed
 **WHEN** a turn is sent and completes
-**THEN** the agent response contains "RESUME_TOKEN"
+**THEN** the agent response contains a standing instruction token
+**AND** the token MAY be the one from the original start, because Grok does not
+replace standing rules on `session/load`
+
+#### Scenario: Metadata still delivered on load
+
+**GIVEN** a resumed conversation with a non-empty `SystemPrompt`
+**WHEN** AO issues `session/load`
+**THEN** the request carries `_meta.rules` with that prompt
+**AND** no assertion is made about Grok applying the newer copy
 
 ---
 

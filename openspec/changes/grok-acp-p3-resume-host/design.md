@@ -22,7 +22,8 @@ integration design for Grok ACP sessions.
 │    6. driver.Resume(providerID) → conv2                             │
 │    7. Send turn: what was codeword? read before.txt                 │
 │    8. Verify response contains ALPHA                                │
-│    9. Verify before.txt still exists                                │
+│    9. Verify before.txt still exists and is unchanged               │
+│   10. Verify a standing token is still applied (START or RESUME)     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -103,8 +104,12 @@ func TestLiveGrokACPResume(t *testing.T) {
     if !strings.Contains(resumeAnswer, "ALPHA") {
         t.Errorf("resumed answer missing codeword: %q", resumeAnswer)
     }
-    if !strings.Contains(resumeAnswer, "RESUME_TOKEN") {
-        t.Errorf("resumed answer missing new standing token: %q", resumeAnswer)
+    // Standing instructions must still be in force, but Grok keeps the rules the
+    // session was created with, so RESUME_TOKEN is optional and START_TOKEN
+    // surviving is the observed behaviour.
+    if !strings.Contains(resumeAnswer, "START_TOKEN") &&
+        !strings.Contains(resumeAnswer, "RESUME_TOKEN") {
+        t.Errorf("resumed answer carries no standing token: %q", resumeAnswer)
     }
     if !strings.Contains(resumeAnswer, "before.txt") {
         t.Errorf("resumed answer doesn't reference file: %q", resumeAnswer)
@@ -121,22 +126,39 @@ func TestLiveGrokACPResume(t *testing.T) {
 
 ## SessionMeta Decision
 
-Grok's ACP may require `_meta` fields for standing instructions:
+Grok's ACP takes standing instructions through `_meta` on the session request:
 
 | Field | Purpose | Grok Behavior |
 |-------|---------|---------------|
-| `_meta.rules` | Standing instructions | Appended to system prompt |
-| `_meta.yoloMode` | Permission bypass | Maps to `--always-approve` |
+| `_meta.rules` | Standing instructions | Folded into `<human_rules>` in Grok's own system prompt on `session/new` |
+| `_meta.yoloMode` | Permission bypass | Maps to `--always-approve` — unused by AO |
 
-**Decision Matrix**:
+**Decision**: the canonical `nativeacp.SessionMeta` hook is enough. `grokacp`
+supplies `rules` from `cfg.SystemPrompt`; no `nativeacp` extension and no
+piacp-style custom `acpdriver.New` are needed. `_meta.yoloMode` stays unused
+because bypass-permissions is already expressed by the `bypassPermissions`
+session mode plus the launch-time `--always-approve` flag, and a second silent
+path to widen approvals is a liability.
 
-| If | Then |
-|----|------|
-| Grok honors standard ACP `session/new` metadata | Use existing `nativeacp` config |
-| Grok requires `_meta.rules` extension | Extend `nativeacp.SessionMeta` (canonical) |
-| Extension too invasive for nativeacp | Use piacp-style custom `acpdriver.New` |
+### `_meta.rules` on `session/load`: documented limitation
 
-Document final decision in implementation PR.
+The shared ACP transport sends `SessionMeta` on `session/new`, `session/load`,
+and `session/resume`, so AO's `_meta.rules` is on the wire for resume too. Grok
+documents the field as a `session/new` input, and the live run confirms the
+provider behaviour: a reloaded session keeps the rules it was created with, and
+the resumed answer still bears the token from the original start even though
+`session/load` carried a different one.
+
+Consequences, stated plainly so no downstream work assumes otherwise:
+
+- Resume **preserves** standing instructions. It does **not** update them.
+- AO must not treat `session/load` as a way to rewrite Grok's standing rules. A
+  session whose standing instructions changed needs a new provider session.
+- AO keeps re-sending `_meta.rules` on load anyway: it costs nothing, keeps the
+  transport's contract uniform across bindings, and a future Grok that honours
+  the update needs no AO change.
+- The live test therefore asserts that *a* standing token is still applied after
+  resume, not that the newer one is.
 
 ## Quality Gates
 

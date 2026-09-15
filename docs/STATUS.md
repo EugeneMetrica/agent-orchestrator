@@ -135,9 +135,13 @@ surface (`npm run sqlc`, `npm run api`).
 - **Auth**: the user's existing `~/.grok` credentials (`XAI_API_KEY`,
   `auth.json`, `config.toml`); AO never bundles or downloads the CLI.
 - **Standing instructions**: delivered through ACP session `_meta.rules`, which
-  Grok appends to its own system prompt rather than replacing it.
+  Grok appends to its own system prompt rather than replacing it. Grok reads that
+  field when it creates a session; it keeps the original rules when it reloads
+  one, so resume preserves standing instructions but does not update them.
 - **Resume**: a terminated session reopens from its stored provider conversation
-  id; Grok recovers the transcript and AO re-delivers `_meta.rules`.
+  id; Grok recovers the transcript and the standing instructions the session was
+  created with. AO still re-sends `_meta.rules` on `session/load` for protocol
+  correctness, but does not depend on Grok applying the newer copy.
 - **Live test**: `AO_LIVE_GROK_ACP=1 go test ./internal/adapters/chatdriver/grokacp/...`
   (skipped unless the gate is set; it spends real Grok account usage). Covers the
   session smoke, the permission-mode matrix, and terminate/resume.

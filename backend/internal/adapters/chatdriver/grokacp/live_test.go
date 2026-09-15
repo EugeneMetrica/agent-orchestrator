@@ -72,8 +72,13 @@ func TestLiveGrokACP(t *testing.T) {
 // daemon restarts, AO reopens the conversation from the stored provider id, and
 // the user expects both the transcript and the workspace to still be there.
 // This asserts that end to end against the real provider — history recovered by
-// Grok itself, standing instructions re-delivered by AO as process input, and
-// the file the first session wrote still untouched on disk.
+// Grok itself, standing instructions still in force, and the file the first
+// session wrote still untouched on disk.
+//
+// It deliberately does not require the *resume* standing token: Grok applies
+// `_meta.rules` when it creates the session and keeps those rules when it
+// reloads one, so a session/load with different rules is observably ignored.
+// See sessionMeta in driver.go for the full behaviour note.
 func TestLiveGrokACPResume(t *testing.T) {
 	if os.Getenv("AO_LIVE_GROK_ACP") != "1" {
 		t.Skip("set AO_LIVE_GROK_ACP=1 to run against the local Grok account")
@@ -116,9 +121,11 @@ func TestLiveGrokACPResume(t *testing.T) {
 		t.Fatalf("Terminate: %v", err)
 	}
 
-	// A different standing token on resume separates the two deliveries: only a
-	// re-sent _meta.rules can produce GROK_STANDING_RESUME, while ALPHA can only
-	// come from the transcript Grok recovered for this provider id.
+	// The resume prompt carries a different token so the run also records which
+	// delivery Grok honours: AO still sends `_meta.rules` on session/load for
+	// protocol correctness, but the provider is free to keep the rules it was
+	// created with. ALPHA, in contrast, can only come from the transcript Grok
+	// recovered for this provider id.
 	resumed, err := driver.Resume(ctx, ports.ChatResumeConfig{
 		SessionID: "live-grok-resume", ProviderConversationID: providerID,
 		DataDir: dataDir, WorkspacePath: workspace, Env: liveEnvMap(),
@@ -136,11 +143,21 @@ func TestLiveGrokACPResume(t *testing.T) {
 	if !strings.Contains(resumeAnswer, "ALPHA") {
 		t.Fatalf("resumed answer lost the pre-terminate history: %q", resumeAnswer)
 	}
-	if !strings.Contains(resumeAnswer, "GROK_STANDING_RESUME") {
-		t.Fatalf("resumed answer omitted the re-delivered standing token: %q", resumeAnswer)
-	}
 	if !strings.Contains(resumeAnswer, "before.txt") {
 		t.Fatalf("resumed answer did not reference the workspace file: %q", resumeAnswer)
+	}
+
+	// The product guarantee is that standing instructions are still in force
+	// after resume, not which of the two deliveries won. Either token proves it,
+	// and the log names the one Grok applied so a provider change shows up in the
+	// run output instead of silently passing.
+	switch {
+	case strings.Contains(resumeAnswer, "GROK_STANDING_RESUME"):
+		t.Log("resume applied the rules AO re-sent on session/load")
+	case strings.Contains(resumeAnswer, "GROK_STANDING_START"):
+		t.Log("resume kept the session/new rules, which is Grok's behaviour today")
+	default:
+		t.Fatalf("resumed answer carries no standing instruction token: %q", resumeAnswer)
 	}
 
 	afterContent, err := os.ReadFile(filepath.Join(workspace, "before.txt"))
