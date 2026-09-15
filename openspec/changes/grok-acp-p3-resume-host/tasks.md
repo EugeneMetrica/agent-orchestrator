@@ -4,6 +4,24 @@
 
 Resume capability and persistent-host integration for Grok ACP sessions.
 
+## Status
+
+Complete. Merged as [#6](https://github.com/EugeneMetrica/agent-orchestrator/pull/6)
+with every CI check green (G2) and the only recorded G1 review of the six phases
+at `reviews/g1-review.md` (PASS_WITH_NITS).
+
+G3 ran live on the box and changed the outcome, which the review's addendum
+records: AO does send `_meta.rules` on `session/load`, but Grok keeps the rules
+the session was created with, so a reloaded session preserves standing
+instructions without updating them. The test now asserts that standing
+instructions are still in force after resume and accepts either token. The
+limitation is stated in `driver.go`, `design.md`, the spec delta, `docs/STATUS.md`,
+and `docs/harnesses/grok.md`.
+
+The warm reattach path — `Close()` instead of `Terminate()`, where `Resume`
+returns early and never re-sends `SessionMeta` — remains uncovered; the review's
+first nit calls this out.
+
 ---
 
 ## Task 3.1: Implement TestLiveGrokACPResume
@@ -67,12 +85,12 @@ AO_LIVE_GROK_ACP=1 go test -v -run Resume ./internal/adapters/chatdriver/grokacp
 ```
 
 **Verification**:
-- [ ] Start succeeds with provider ID
-- [ ] File created before terminate
-- [ ] Resume succeeds with same provider ID
-- [ ] Agent response includes codeword from before terminate
-- [ ] File still exists after resume
-- [ ] A standing instruction token is still applied after resume — the one from
+- [x] Start succeeds with provider ID
+- [x] File created before terminate
+- [x] Resume succeeds with same provider ID
+- [x] Agent response includes codeword from before terminate
+- [x] File still exists after resume
+- [x] A standing instruction token is still applied after resume — the one from
       the original start counts, because Grok keeps the rules a session was
       created with (see design.md, "`_meta.rules` on `session/load`")
 
@@ -102,23 +120,24 @@ Manual verification:
 ## Exit Criteria Checklist
 
 ### G1: Independent Deep Review
-- [ ] Review conducted by non-author
-- [ ] Review note created at `reviews/g1-review.md`
-- [ ] Review verdict: PASS or FAIL with rationale
+- [x] Review conducted by non-author
+- [x] Review note created at `reviews/g1-review.md`
+- [x] Review verdict: PASS_WITH_NITS, recommend MERGE
 
-### G2: Full CI Suite
-- [ ] `gofmt -l .` returns no files
-- [ ] `go build ./...` succeeds
-- [ ] `go vet ./...` passes
-- [ ] `go test ./...` passes (live tests skip)
-- [ ] `go test -race ./...` passes
-- [ ] `mise run lint` passes (golangci-lint v2.13.2)
+### G2: Full CI Suite — green on the merged head
+- [x] `gofmt -l .` returns no files
+- [x] `go build ./...` succeeds
+- [x] `go vet ./...` passes
+- [x] `go test ./...` passes (live tests skip)
+- [x] `go test -race ./...` passes
+- [x] `mise run lint` passes (pinned golangci-lint)
 
-### G3: Live Resume Test
-- [ ] `AO_LIVE_GROK_ACP=1` set
-- [ ] Resume test passes
-- [ ] History visible after resume
-- [ ] File persists across terminate/resume
+### G3: Live Resume Test — ran on the box; see the review addendum
+- [x] `AO_LIVE_GROK_ACP=1` set
+- [x] Resume test passes
+- [x] Provider-side history visible after resume (the model recalls the codeword;
+      AO's own typed transcript replay depends on Grok advertising `loadSession`)
+- [x] File persists across terminate/resume
 
 ### G4: AO Frontend/CLI UI
 - [ ] Session survives daemon restart

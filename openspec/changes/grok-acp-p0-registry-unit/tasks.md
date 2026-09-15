@@ -5,6 +5,17 @@
 Unit tests and registry integration for the Grok ACP Chat driver binding.
 No live integration; gates all subsequent phases.
 
+## Status
+
+Complete. Merged as [#3](https://github.com/EugeneMetrica/agent-orchestrator/pull/3)
+with every CI check green, which is what attests G2. G3 and G4 are waived for
+this phase by design: it ships unit and registry coverage only.
+
+One correction landed during the phase and is carried in the spec delta: argv
+`--rules` is inert in Grok's `agent` mode, so standing instructions travel
+through ACP session `_meta.rules` by way of a new `nativeacp` `SessionMeta`
+hook.
+
 ---
 
 ## Task 0.1: Create grokacp Package Scaffolding
@@ -141,13 +152,13 @@ go test -race ./...
 - [ ] Review note created at `reviews/g1-review.md`
 - [ ] Review verdict: PASS or FAIL with rationale
 
-### G2: Full CI Suite
-- [ ] `gofmt -l .` returns no files
-- [ ] `go build ./...` succeeds
-- [ ] `go vet ./...` passes
-- [ ] `go test ./...` passes
-- [ ] `go test -race ./...` passes
-- [ ] `mise run lint` passes (golangci-lint v2.13.2)
+### G2: Full CI Suite — green on the merged head
+- [x] `gofmt -l .` returns no files
+- [x] `go build ./...` succeeds
+- [x] `go vet ./...` passes
+- [x] `go test ./...` passes
+- [x] `go test -race ./...` passes
+- [x] `mise run lint` passes (pinned golangci-lint)
 
 ### G3: Live Mini-Task (WAIVED)
 - [x] **WAIVED** for P0 — unit tests only, no live Grok required

@@ -7,26 +7,55 @@ interaction, with Claude Code via ai.metrica.pro as reference implementation.
 
 ## Status
 
-Implementation complete; the two live gates are unverified because no machine in
-the implementation loop had a Grok or Claude Code installation.
+Complete. Merged as [#8](https://github.com/EugeneMetrica/agent-orchestrator/pull/8);
+G3 and G4 ran live afterwards on a box with both provider CLIs installed
+(2026-09-15).
 
 - Written and statically verified: both spec files, the shared live bootstrap
   (`frontend/e2e/support/live-daemon.ts`) and scenario bodies
   (`frontend/e2e/support/live-chat-scenarios.ts`), the `dev:web:live` renderer
   server, and the router documentation.
-- Ran green: `npm run typecheck`, `npm run typecheck:e2e`, `npx vitest run`,
-  `CI=true npm run test:e2e:renderer` (60 passed), the ungated
+- Ran green at merge: `npm run typecheck`, `npm run typecheck:e2e`,
+  `npx vitest run`, `CI=true npm run test:e2e:renderer` (60 passed), the ungated
   `npx playwright test chat-grok-e2e chat-reference-e2e` (10 skipped, 0 failed),
   `mise run lint`, and `go test ./...`.
-- Not run: G3 and G4. Both need a real daemon plus the provider CLI, so the
-  scenario bodies have never executed against a live model. Every selector they
-  use was instead checked against the renderer source and the existing
-  renderer-level tests that already assert the same accessible names.
-- Also unverified end to end: the live renderer bootstrap was exercised as far as
-  the new-task dialog against a real daemon (project list, readiness catalog,
-  agent menu, prompt field, enabled Start task). The chat surfaces past that
-  point could not be reached — the daemon's `fake` harness is a terminal
-  timeline script, not an ACP chat controller, so it cannot stand in for Grok.
+- **G3 — live Grok, 6/6 passed.**
+
+  ```bash
+  AO_LIVE_GROK_ACP=1 AO_E2E_LIVE_PROJECT=<projectId> \
+    npx playwright test chat-grok-e2e
+  ```
+
+  All six scenarios executed against a real daemon and a real Grok account:
+  harness selection, model switch, reasoning effort, attachment delivery,
+  timeline activities, and the workspace panel. No scenario reported the
+  "provider offers no second model" or "nothing advertises efforts" skip, so the
+  model and effort controls were both exercised on live catalogs.
+- **G4 — Claude Code reference, 4/4 passed.**
+
+  ```bash
+  AO_LIVE_CLAUDE_ACP=1 CLAUDE_ROUTER_URL=https://ai.metrica.pro/v1 \
+    AO_E2E_LIVE_PROJECT=<projectId> \
+    npx playwright test chat-reference-e2e
+  ```
+
+  Claude Code ran on its canonical configuration for this stack: the
+  Anthropic-compatible gateway at `https://ai.metrica.pro/v1` with the GLM 5.3
+  family as the primary model mapping (`ANTHROPIC_DEFAULT_OPUS_MODEL=glm-5.3`,
+  `ANTHROPIC_DEFAULT_SONNET_MODEL=glm-5.3-flash`). The parity claim is about the
+  harness contract — the Claude Code harness driven through AO's `claudeacp`
+  binding over the Anthropic wire protocol — and that is what both runs
+  exercised. See `docs/research/grok-claude-parity-p4b.md` for what the two runs
+  do and do not establish.
+- **Fixture prerequisite found by the run.** The project named by
+  `AO_E2E_LIVE_PROJECT` needs a resolvable default branch. A project still
+  reporting `auto` fails at session spawn, before any UI assertion; setting its
+  `defaultBranch` to `main` is what made the run reach the UI. Recorded in
+  `design.md` and `docs/harnesses/grok.md`.
+- **G1 for this phase is not recorded.** No independent review note exists at
+  `reviews/g1-review.md` for P4b. The two corrections the live runs did force —
+  the provider `config-options` model path and the daemon-named attachment path —
+  are carried in the spec delta and in `design.md`'s "As built" section.
 
 ---
 
@@ -208,18 +237,18 @@ cd backend && go test ./... && go test -race ./...
 - [x] `npm run frontend:typecheck` passes
 - [x] Backend tests pass
 
-### G3: Live Playwright Grok Tests
-- [ ] `AO_LIVE_GROK_ACP=1` set
-- [ ] Grok harness selection works
-- [ ] Model switch applies to engine
-- [ ] File attachments delivered to worktree
-- [ ] Timeline shows activities
+### G3: Live Playwright Grok Tests — 6/6 passed
+- [x] `AO_LIVE_GROK_ACP=1` set
+- [x] Grok harness selection works
+- [x] Model switch applies to engine
+- [x] File attachments delivered to worktree
+- [x] Timeline shows activities
 
-### G4: Claude Code Reference Parity
-- [ ] `AO_LIVE_CLAUDE_ACP=1` set
-- [ ] `CLAUDE_ROUTER_URL=https://ai.metrica.pro/v1` set
-- [ ] Same tests pass for Claude Code
-- [ ] Grok behavior matches Claude Code for:
+### G4: Claude Code Reference Parity — 4/4 passed
+- [x] `AO_LIVE_CLAUDE_ACP=1` set
+- [x] `CLAUDE_ROUTER_URL=https://ai.metrica.pro/v1` set
+- [x] Same tests pass for Claude Code
+- [x] Grok behavior matches Claude Code for:
   - Model switch
   - Reasoning effort
   - File attachments

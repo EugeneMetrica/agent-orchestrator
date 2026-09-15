@@ -5,6 +5,21 @@
 Live smoke test proving Probe→Start→SendTurn works with real Grok CLI and
 creates verifiable files on disk.
 
+## Status
+
+Complete. Merged as [#4](https://github.com/EugeneMetrica/agent-orchestrator/pull/4)
+with every CI check green (G2). The gated run is:
+
+```bash
+AO_LIVE_GROK_ACP=1 go test -v ./internal/adapters/chatdriver/grokacp/
+```
+
+Its own G3 result was not recorded in this repository at merge time. The same
+Probe→Start→SendTurn path was later driven end to end by the P4b live UI run,
+which spawned real Grok Chat sessions and completed turns on them
+(6/6 passed, 2026-09-15); that is coverage of this phase's subject through the
+UI, not a re-run of `TestLiveGrokACP` itself.
+
 ---
 
 ## Task 1.1: Create live_test.go
@@ -126,13 +141,13 @@ Manual verification using AO desktop app:
 - [ ] Review note created at `reviews/g1-review.md`
 - [ ] Review verdict: PASS or FAIL with rationale
 
-### G2: Full CI Suite
-- [ ] `gofmt -l .` returns no files
-- [ ] `go build ./...` succeeds
-- [ ] `go vet ./...` passes
-- [ ] `go test ./...` passes (live tests skip)
-- [ ] `go test -race ./...` passes
-- [ ] `mise run lint` passes (golangci-lint v2.13.2)
+### G2: Full CI Suite — green on the merged head
+- [x] `gofmt -l .` returns no files
+- [x] `go build ./...` succeeds
+- [x] `go vet ./...` passes
+- [x] `go test ./...` passes (live tests skip)
+- [x] `go test -race ./...` passes
+- [x] `mise run lint` passes (pinned golangci-lint)
 
 ### G3: Live Mini-Task
 - [ ] `AO_LIVE_GROK_ACP=1` set
