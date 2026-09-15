@@ -219,9 +219,10 @@ AO_LIVE_CLAUDE_ACP=1 CLAUDE_ROUTER_URL=https://ai.metrica.pro/v1 \
 
 The reference harness is Claude Code driven through AO's `claudeacp` binding,
 run on its standing reference configuration: the GLM 5.3 family over the
-Anthropic-compatible gateway at `https://ai.metrica.pro/v1`. The reproducible
-environment block, and why a gateway route is a supported configuration rather
-than a substitution, are in
+Anthropic-compatible gateway at `https://ai.metrica.pro/v1`, per the operator
+procedure in [Z.ai's Claude Code guide](https://docs.z.ai/devpack/tool/claude).
+The reproducible environment block, and why a gateway route is a supported
+configuration rather than a substitution, are in
 [the Claude Code harness doc](claude-code.md#standing-reference-configuration-glm-53-over-the-anthropic-compatible-gateway).
 [The parity note](../research/grok-claude-parity-p4b.md) records what the runs
 do and do not establish.

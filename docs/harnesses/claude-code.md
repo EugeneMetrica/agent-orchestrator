@@ -62,6 +62,13 @@ This is the supported configuration for AO's live Claude Code runs — the G4
 parity reference today, and the pattern future live Claude runs should assume,
 rather than a one-off substitution for a particular test session.
 
+**Operator reference:**
+[Z.ai — Methods for Using the GLM Coding Plan in Claude Code](https://docs.z.ai/devpack/tool/claude).
+That guide is the upstream procedure for putting Claude Code on GLM primary
+models — same variables, same `~/.claude/settings.json` `env` block. The values
+below are this stack's slot assignment of it, and they are not identical to the
+guide's example: see the note after the table.
+
 Claude Code's aliases are remapped to the GLM 5.3 family through the gateway:
 
 | Variable | Value | What it controls |
@@ -112,11 +119,23 @@ Four things are worth knowing before reproducing it:
   recorded as `unidentified`, so its sessions are not priced. That affects cost
   reporting only; it has no bearing on the harness contract.
 
-The same pattern is documented upstream by Z.ai for the GLM Coding Plan, whose
-Anthropic-protocol endpoint is `https://api.z.ai/api/anthropic`
-([Z.ai docs](https://docs.z.ai/devpack/tool/claude)); the variables themselves
-are Claude Code's own
-([model configuration](https://code.claude.com/docs/en/model-config)).
+Both halves of this are upstream-documented, which is why it is a supported
+configuration rather than a local workaround:
+[Z.ai's Claude Code guide](https://docs.z.ai/devpack/tool/claude) is the
+operator procedure and gives `https://api.z.ai/api/anthropic` as the direct
+Anthropic-protocol endpoint for the GLM Coding Plan, while the variables
+themselves are Claude Code's own
+([model configuration](https://code.claude.com/docs/en/model-config)). The
+gateway at `ai.metrica.pro` fronts the same protocol.
+
+Two differences from that guide's example block are deliberate, not drift. It
+points `ANTHROPIC_BASE_URL` at Z.ai directly, where this stack points it at the
+`ai.metrica.pro` gateway in front of the same protocol; and it fills both the
+Opus and Sonnet slots with `glm-5.3`, reserving `glm-5.3-flash` for Haiku, where
+this stack puts `glm-5.3` in the Opus slot and `glm-5.3-flash` in the Sonnet
+one, so `sonnet` stays the cheaper choice as the alias implies. The guide also
+suffixes its ids (`glm-5.3[1m]`) to request the million-token context window;
+the plain ids used here take the model's default window.
 
 ## Role in AO's live gates
 

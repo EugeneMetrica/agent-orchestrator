@@ -154,9 +154,14 @@ details below — are in
   }
   ```
 
-  This is a supported configuration rather than a substitution for one test
-  session: AO already names this class of route (`api.z.ai` → the `zai` billing
-  provider in `claudeHookProviderHint`) and prices both `glm-5.3` and
+  The operator procedure this follows is
+  [Z.ai's Claude Code guide](https://docs.z.ai/devpack/tool/claude), whose
+  direct Anthropic-protocol endpoint is `https://api.z.ai/api/anthropic`; the
+  variables are Claude Code's own
+  ([model configuration](https://code.claude.com/docs/en/model-config)). It is
+  therefore a supported configuration rather than a substitution for one test
+  session, and AO already names this class of route (`api.z.ai` → the `zai`
+  billing provider in `claudeHookProviderHint`) and prices both `glm-5.3` and
   `glm-5.3-flash` in `pricing/catalog/v1/providers/zai`. A gateway host AO
   cannot name is recorded as `unidentified`, which affects cost attribution only
   and not the harness contract.

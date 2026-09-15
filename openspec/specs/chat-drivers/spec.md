@@ -866,11 +866,12 @@ The reference environment runs Claude Code against the Anthropic-compatible
 gateway at `https://ai.metrica.pro/v1`, with the GLM 5.3 family as its primary
 model mapping (`ANTHROPIC_DEFAULT_OPUS_MODEL=glm-5.3`,
 `ANTHROPIC_DEFAULT_SONNET_MODEL=glm-5.3-flash`). That is the standing Claude
-Code configuration on this stack, not a fallback: the Anthropic wire protocol is
-what Claude Code and AO's ACP binding speak, and AO already names this route
-(`api.z.ai` → `zai` in `claudeHookProviderHint`) and prices `glm-5.3` and
-`glm-5.3-flash` in `pricing/catalog/v1/providers/zai`. Future live Claude runs
-SHALL assume it; the reproducible environment block is
+Code configuration on this stack, not a fallback: the operator procedure is
+documented upstream by Z.ai (https://docs.z.ai/devpack/tool/claude), the
+Anthropic wire protocol is what Claude Code and AO's ACP binding speak, and AO
+already names this route (`api.z.ai` → `zai` in `claudeHookProviderHint`) and
+prices `glm-5.3` and `glm-5.3-flash` in `pricing/catalog/v1/providers/zai`.
+Future live Claude runs SHALL assume it; the reproducible environment block is
 `docs/harnesses/claude-code.md`.
 
 **GIVEN** Claude Code configured against the gateway with that model mapping

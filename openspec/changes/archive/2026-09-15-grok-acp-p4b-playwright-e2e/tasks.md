@@ -42,11 +42,12 @@ G3 and G4 ran live afterwards on a box with both provider CLIs installed
   Claude Code ran on its canonical configuration for this stack: the
   Anthropic-compatible gateway at `https://ai.metrica.pro/v1` with the GLM 5.3
   family as the primary model mapping (`ANTHROPIC_DEFAULT_OPUS_MODEL=glm-5.3`,
-  `ANTHROPIC_DEFAULT_SONNET_MODEL=glm-5.3-flash`). The parity claim is about the
-  harness contract — the Claude Code harness driven through AO's `claudeacp`
-  binding over the Anthropic wire protocol — and that is what both runs
-  exercised. See `docs/research/grok-claude-parity-p4b.md` for what the two runs
-  do and do not establish.
+  `ANTHROPIC_DEFAULT_SONNET_MODEL=glm-5.3-flash`), following the operator
+  procedure Z.ai documents at https://docs.z.ai/devpack/tool/claude. The parity
+  claim is about the harness contract — the Claude Code harness driven through
+  AO's `claudeacp` binding over the Anthropic wire protocol — and that is what
+  both runs exercised. See `docs/research/grok-claude-parity-p4b.md` for what
+  the two runs do and do not establish.
 - **Fixture prerequisite found by the run.** The project named by
   `AO_E2E_LIVE_PROJECT` needs a resolvable default branch. A project still
   reporting `auto` fails at session spawn, before any UI assertion; setting its

@@ -89,8 +89,11 @@ go through it.
 
 The gateway speaks the Anthropic wire protocol, which is what Claude Code and
 AO's `claudeacp` binding both talk, so nothing in AO needs to know which models
-sit behind it. AO does already name this class of route on its own: the Claude
-hook route hint maps `api.z.ai` to the `zai` billing provider
+sit behind it. Z.ai documents the operator procedure for this mapping
+(https://docs.z.ai/devpack/tool/claude), whose direct Anthropic-protocol
+endpoint is `https://api.z.ai/api/anthropic`; the `ai.metrica.pro` gateway
+fronts the same protocol. AO does already name this class of route on its own:
+the Claude hook route hint maps `api.z.ai` to the `zai` billing provider
 (`backend/internal/cli/hooks.go`), and `pricing/catalog/v1/providers/zai` prices
 `glm-5.3` and `glm-5.3-flash`.
 

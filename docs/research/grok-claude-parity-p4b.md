@@ -42,14 +42,20 @@ verify the routing from the inside; requiring it means an unconfigured machine
 skips instead of quietly passing as G4.
 
 This is the standing production pattern on this stack, not a stand-in for an
-absent one. GLM 5.3 is multimodal and speaks the Anthropic protocol, which is
-the contract Claude Code and AO's ACP binding both talk, so neither side needs
-to know which models sit behind the gateway. AO already names this class of
-route on its own: the Claude hook route hint maps `api.z.ai` to the `zai`
-billing provider (`backend/internal/cli/hooks.go`), and
-`pricing/catalog/v1/providers/zai` prices both `glm-5.3` and `glm-5.3-flash`.
-Future live Claude runs should assume this configuration rather than treating it
-as specific to the P4b session.
+absent one. The operator procedure it follows is
+[Z.ai's Claude Code guide](https://docs.z.ai/devpack/tool/claude), which
+documents running Claude Code on GLM primary models over the
+Anthropic-protocol endpoint (`https://api.z.ai/api/anthropic` upstream; the
+`ai.metrica.pro` gateway fronts the same protocol), and the variables are
+Claude Code's own
+([model configuration](https://code.claude.com/docs/en/model-config)). GLM 5.3
+is multimodal and speaks the Anthropic protocol, which is the contract Claude
+Code and AO's ACP binding both talk, so neither side needs to know which models
+sit behind the gateway. AO already names this class of route on its own: the
+Claude hook route hint maps `api.z.ai` to the `zai` billing provider
+(`backend/internal/cli/hooks.go`), and `pricing/catalog/v1/providers/zai`
+prices both `glm-5.3` and `glm-5.3-flash`. Future live Claude runs should assume
+this configuration rather than treating it as specific to the P4b session.
 
 One accounting detail is worth stating because it is easy to trip over:
 `ai.metrica.pro` is not `api.z.ai`, so `claudeHookProviderHint` records it as
