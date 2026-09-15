@@ -63,7 +63,10 @@ it passes 5/5 under `-race` on the PR worktree while failing on `main` at
 `df41f4d44` in the same conditions. The whole `internal/httpd` package is green
 under `-race` on the PR worktree once the machine is idle.
 
-CI's `build-test` job is the authority for all four.
+CI's `build-test` job is the authority for all four, and it passed remotely on
+this head (21m42s), as did `lint`, `api-drift`, `sqlc-drift`,
+`cloud-build-test`, `container`, `windows-workspace`, `scan`, and the three
+`native` jobs.
 
 ### G3 (live matrix): SKIPPED, not verified
 
