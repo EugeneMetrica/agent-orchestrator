@@ -51,8 +51,25 @@ func configure(_ context.Context, cfg acpdriver.LaunchConfig) ([]string, map[str
 // metadata Grok's agent mode reads. Grok folds `_meta.rules` into the
 // `<human_rules>` section of its own system prompt, so AO's instructions are
 // appended to — never a replacement for — what the user's installation
-// configures. The shared transport repeats this metadata on session/load and
-// session/resume, so a recovered conversation keeps the same standing context.
+// configures.
+//
+// The shared transport also sends this metadata on session/load and
+// session/resume, and AO keeps doing so for protocol correctness. Grok, however,
+// documents `_meta.rules` as a session/new input: a reloaded session keeps the
+// rules it was created with, and a session/load carrying different rules is
+// observably ignored (proved on the wire by TestLiveGrokACPResume, where the
+// resumed answer still bears the token from the original start). So resume
+// preserves standing instructions but does not update them; AO must not rely on
+// session/load to rewrite them, and a session whose standing instructions
+// changed needs a new provider session. Re-sending stays worthwhile because it
+// costs nothing today and a future Grok that honours it needs no AO change.
+//
+// Resume therefore needs no extension to nativeacp or a Grok-specific ACP
+// transport: `rules` is the only `_meta` field AO sends. Grok's other documented
+// extension, `_meta.yoloMode`, stays unused because AO already expresses
+// bypass-permissions through the `bypassPermissions` session mode plus the
+// launch-time `--always-approve` flag, and duplicating it in metadata would give
+// the session a second, silent way to widen the user's approvals.
 func sessionMeta(cfg acpdriver.LaunchConfig) map[string]any {
 	prompt := strings.TrimSpace(cfg.SystemPrompt)
 	if prompt == "" {

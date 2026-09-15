@@ -72,6 +72,9 @@ AO_LIVE_GROK_ACP=1 go test -v -run Resume ./internal/adapters/chatdriver/grokacp
 - [ ] Resume succeeds with same provider ID
 - [ ] Agent response includes codeword from before terminate
 - [ ] File still exists after resume
+- [ ] A standing instruction token is still applied after resume — the one from
+      the original start counts, because Grok keeps the rules a session was
+      created with (see design.md, "`_meta.rules` on `session/load`")
 
 ---
 
