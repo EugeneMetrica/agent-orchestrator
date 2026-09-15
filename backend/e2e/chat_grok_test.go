@@ -482,17 +482,19 @@ func TestChatGrokServerStateConsistency(t *testing.T) {
 	}
 
 	// Tool use has to be on the timeline, or the answer arrives with no account of
-	// how it was reached.
-	commands := 0
+	// how it was reached. Grok's ACP agent reports shell tools without ToolKind
+	// execute, so the shared ACP mapper records them as mcp_tool rather than
+	// command; either kind proves the turn reached a tool.
+	tools := 0
 	for _, a := range snap.Activities {
-		if a.TurnID == turnID && a.Kind == "command" {
-			commands++
+		if a.TurnID == turnID && (a.Kind == "command" || a.Kind == "mcp_tool") {
+			tools++
 		}
 		if a.Kind == "" || a.Status == "" {
 			t.Errorf("activity %s has no kind or status, so it cannot be rendered: %+v", a.ID, a)
 		}
 	}
-	if commands == 0 {
-		t.Errorf("no command activity recorded for a turn that had to read the repo:\n%s", describe(snap))
+	if tools == 0 {
+		t.Errorf("no tool activity recorded for a turn that had to read the repo:\n%s", describe(snap))
 	}
 }
