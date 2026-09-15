@@ -98,6 +98,12 @@ func TestLiveGrokACPResume(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
+	// Terminate is sync.Once-guarded, so the explicit call below still owns the
+	// happy path. This defer only covers a fatal before it: SessionID is fixed
+	// and dataDir defaults to the real ~/.ao, so a surviving persistent host
+	// would make the next run fail on an existing session instead of the
+	// original problem.
+	defer conv.(ports.ChatProviderTerminator).Terminate()
 	providerID := conv.ProviderConversationID()
 	if providerID == "" {
 		t.Fatalf("provider conversation id = %q, want non-empty", providerID)

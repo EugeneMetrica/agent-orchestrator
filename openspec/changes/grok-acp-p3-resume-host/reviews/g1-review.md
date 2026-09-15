@@ -83,3 +83,26 @@ G2 caveat: the full `go test ./...` initially reported 4 failures in `internal/o
 The test asserts the right things, the assertions are sound against the transport they depend on, the documented SessionMeta decision matches what the code actually does, and production behavior is unchanged. G2 is green with the pinned linter. G3 is unverifiable in this environment and is explicitly left to the parent.
 
 **PASS_WITH_NITS — MERGE.** All five nits are comment, docs-wording, or test-hygiene items; none needs to block, and none touches shipped behavior.
+
+## Addendum after the G3 live run (supersedes the standing-token rows above)
+
+The live run on the box invalidated one audited assertion. AO does send
+`_meta.rules` carrying the resume prompt on `session/load` — the wire confirms it,
+so the transport analysis in "Is the SessionMeta decision correct?" stands — but
+Grok answered the resumed turn with `GROK_STANDING_START`, not
+`GROK_STANDING_RESUME`. Grok applies `_meta.rules` when it creates a session and
+keeps the rules that session was created with when it reloads one, so a
+`session/load` carrying different rules has no effect.
+
+The review reasoned that `GROK_STANDING_RESUME` "cannot false-pass" because only a
+re-delivery could produce it. That is true, and it is exactly why the assertion
+failed: there is no re-delivery to observe. Two rows above are therefore
+superseded — the spec-coverage row "Standing instructions apply on resume" and the
+third bullet under "Would the assertions actually catch a regression?".
+
+Resolution (see `fix(grokacp): assert resume keeps standing instructions, not new
+rules`): the test now asserts that standing instructions are still in force after
+resume and accepts either token, logging which one Grok applied. AO keeps sending
+`_meta.rules` on load for protocol correctness. The limitation is recorded in
+`driver.go`, `design.md`, the spec, and `docs/STATUS.md`. Nit 3 is also fixed; nits
+1, 2, 4, and 5 remain open by choice.
