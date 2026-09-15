@@ -5,6 +5,29 @@
 Playwright E2E tests validating the frontend↔engine contract through real UI
 interaction, with Claude Code via ai.metrica.pro as reference implementation.
 
+## Status
+
+Implementation complete; the two live gates are unverified because no machine in
+the implementation loop had a Grok or Claude Code installation.
+
+- Written and statically verified: both spec files, the shared live bootstrap
+  (`frontend/e2e/support/live-daemon.ts`) and scenario bodies
+  (`frontend/e2e/support/live-chat-scenarios.ts`), the `dev:web:live` renderer
+  server, and the router documentation.
+- Ran green: `npm run typecheck`, `npm run typecheck:e2e`, `npx vitest run`,
+  `CI=true npm run test:e2e:renderer` (60 passed), the ungated
+  `npx playwright test chat-grok-e2e chat-reference-e2e` (10 skipped, 0 failed),
+  `mise run lint`, and `go test ./...`.
+- Not run: G3 and G4. Both need a real daemon plus the provider CLI, so the
+  scenario bodies have never executed against a live model. Every selector they
+  use was instead checked against the renderer source and the existing
+  renderer-level tests that already assert the same accessible names.
+- Also unverified end to end: the live renderer bootstrap was exercised as far as
+  the new-task dialog against a real daemon (project list, readiness catalog,
+  agent menu, prompt field, enabled Start task). The chat surfaces past that
+  point could not be reached — the daemon's `fake` harness is a terminal
+  timeline script, not an ACP chat controller, so it cannot stand in for Grok.
+
 ---
 
 ## Task 4b.1: Create chat-grok-e2e.spec.ts
@@ -49,10 +72,10 @@ test("select Grok harness in new task dialog", async ({ page }) => {
 Test model dropdown changes engine model.
 
 **Assertions**:
-- [ ] Model dropdown opens
-- [ ] Selection changes UI display
-- [ ] API state reflects new model
-- [ ] Next turn uses selected model
+- [x] Model dropdown opens
+- [x] Selection changes UI display
+- [x] API state reflects new model
+- [x] Next turn uses selected model
 
 **Verification**: `AO_LIVE_GROK_ACP=1 npx playwright test -g "model switch"`
 
@@ -63,9 +86,9 @@ Test model dropdown changes engine model.
 Test reasoning effort selector propagates.
 
 **Assertions**:
-- [ ] Effort selector accessible
-- [ ] Change reflects in UI
-- [ ] API state shows effort
+- [x] Effort selector accessible
+- [x] Change reflects in UI
+- [x] API state shows effort
 
 **Verification**: `AO_LIVE_GROK_ACP=1 npx playwright test -g "reasoning effort"`
 
@@ -76,10 +99,10 @@ Test reasoning effort selector propagates.
 Test file upload via UI.
 
 **Assertions**:
-- [ ] File input accepts file
-- [ ] Upload completes
-- [ ] File exists in worktree
-- [ ] Agent can read file
+- [x] File input accepts file
+- [x] Upload completes
+- [x] File exists in worktree
+- [x] Agent can read file
 
 **Verification**: `AO_LIVE_GROK_ACP=1 npx playwright test -g "file attachment"`
 
@@ -90,9 +113,9 @@ Test file upload via UI.
 Test timeline shows tool activities.
 
 **Assertions**:
-- [ ] Command activities visible
-- [ ] File edit activities visible
-- [ ] Can expand/view details
+- [x] Command activities visible
+- [x] File edit activities visible
+- [x] Can expand/view details
 
 **Verification**: `AO_LIVE_GROK_ACP=1 npx playwright test -g "timeline"`
 
@@ -103,8 +126,8 @@ Test timeline shows tool activities.
 Test workspace panel matches worktree.
 
 **Assertions**:
-- [ ] Created files appear in panel
-- [ ] Panel content matches `os.ReadFile`
+- [x] Created files appear in panel
+- [x] Panel content matches `os.ReadFile`
 
 **Verification**: `AO_LIVE_GROK_ACP=1 npx playwright test -g "workspace panel"`
 
@@ -139,10 +162,10 @@ test.describe("Claude Code Reference E2E", () => {
 
 Mirror all Grok tests for Claude Code:
 
-- [ ] `reference: model switch from UI applies to engine`
-- [ ] `reference: reasoning effort propagates`
-- [ ] `reference: file attachment delivered to worktree`
-- [ ] `reference: timeline shows tool activities`
+- [x] `reference: model switch from UI applies to engine`
+- [x] `reference: reasoning effort propagates`
+- [x] `reference: file attachment delivered to worktree`
+- [x] `reference: timeline shows tool activities`
 
 **Verification**: `AO_LIVE_CLAUDE_ACP=1 CLAUDE_ROUTER_URL=https://ai.metrica.pro/v1 npx playwright test chat-reference-e2e`
 
@@ -182,8 +205,8 @@ cd backend && go test ./... && go test -race ./...
 - [ ] Review verdict: PASS or FAIL with rationale
 
 ### G2: Full CI Suite
-- [ ] `npm run frontend:typecheck` passes
-- [ ] Backend tests pass
+- [x] `npm run frontend:typecheck` passes
+- [x] Backend tests pass
 
 ### G3: Live Playwright Grok Tests
 - [ ] `AO_LIVE_GROK_ACP=1` set
