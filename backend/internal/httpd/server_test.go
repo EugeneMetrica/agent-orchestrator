@@ -225,9 +225,14 @@ func TestServerRunWithReadyPublishesBeforeCallback(t *testing.T) {
 func TestServerShutdownEndpoint(t *testing.T) {
 	runPath := filepath.Join(t.TempDir(), "running.json")
 	cfg := config.Config{
-		Host:            "127.0.0.1",
-		Port:            0,
-		ShutdownTimeout: 5 * time.Second,
+		Host: "127.0.0.1",
+		Port: 0,
+		// Generous relative to the work the drain actually does: POST /shutdown
+		// fires the request from inside its own handler, so Shutdown always
+		// waits for that connection to go idle. Under -race on a loaded CI
+		// runner that drain has overshot a 5s budget, making Run return
+		// "graceful shutdown exceeded 5s" and flaking the test.
+		ShutdownTimeout: 30 * time.Second,
 		RunFilePath:     runPath,
 	}
 
@@ -256,7 +261,7 @@ func TestServerShutdownEndpoint(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Run returned error on shutdown endpoint: %v", err)
 		}
-	case <-time.After(10 * time.Second):
+	case <-time.After(cfg.ShutdownTimeout + 15*time.Second):
 		t.Fatal("Run did not return after shutdown endpoint")
 	}
 
