@@ -23,8 +23,11 @@ binding over the Anthropic wire protocol.
 
 Which models answer behind that protocol is the operator's own Claude Code
 configuration; AO configures none of it and reads none of these variables. On
-this stack the canonical Claude Code mapping is the Anthropic-compatible gateway
-at `https://ai.metrica.pro/v1` with the GLM 5.3 family as the primary models:
+this stack the standing mapping — the supported configuration for this run and
+for future live Claude runs, documented in full in
+[the Claude Code harness doc](../harnesses/claude-code.md#standing-reference-configuration-glm-53-over-the-anthropic-compatible-gateway)
+— is the Anthropic-compatible gateway at `https://ai.metrica.pro/v1` with the
+GLM 5.3 family mapped onto Claude Code's aliases:
 
 | Variable (Claude Code's own environment) | Value |
 | --- | --- |
@@ -38,13 +41,15 @@ statement that the above was configured. AO never reads it, so the spec cannot
 verify the routing from the inside; requiring it means an unconfigured machine
 skips instead of quietly passing as G4.
 
-This is a first-class configuration, not a stand-in. GLM 5.3 is multimodal and
-speaks the Anthropic protocol, which is the contract Claude Code and AO's ACP
-binding both talk, so neither side needs to know which models sit behind the
-gateway. AO already names this class of route on its own: the Claude hook route
-hint maps `api.z.ai` to the `zai` billing provider
-(`backend/internal/cli/hooks.go`), and `pricing/catalog/v1/providers/zai` prices
-both `glm-5.3` and `glm-5.3-flash`.
+This is the standing production pattern on this stack, not a stand-in for an
+absent one. GLM 5.3 is multimodal and speaks the Anthropic protocol, which is
+the contract Claude Code and AO's ACP binding both talk, so neither side needs
+to know which models sit behind the gateway. AO already names this class of
+route on its own: the Claude hook route hint maps `api.z.ai` to the `zai`
+billing provider (`backend/internal/cli/hooks.go`), and
+`pricing/catalog/v1/providers/zai` prices both `glm-5.3` and `glm-5.3-flash`.
+Future live Claude runs should assume this configuration rather than treating it
+as specific to the P4b session.
 
 One accounting detail is worth stating because it is easy to trip over:
 `ai.metrica.pro` is not `api.z.ai`, so `claudeHookProviderHint` records it as
@@ -118,6 +123,9 @@ choice.
 
 ## Related
 
+- [Claude Code harness doc](../harnesses/claude-code.md) — the reference
+  harness: routing, the reproducible gateway configuration, and its role in
+  AO's live gates.
 - [Grok harness doc](../harnesses/grok.md) — install, modes, permission
   mapping, resume caveats, and the full gate list.
 - [docs/STATUS.md](../STATUS.md) — shipped state and the live evidence summary.

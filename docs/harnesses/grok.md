@@ -217,12 +217,14 @@ AO_LIVE_CLAUDE_ACP=1 CLAUDE_ROUTER_URL=https://ai.metrica.pro/v1 \
   npx playwright test chat-reference-e2e
 ```
 
-The reference harness is Claude Code driven through AO's `claudeacp` binding.
-Which models answer behind it is the operator's own Claude Code configuration:
-on this stack that is the Anthropic-compatible gateway at
-`https://ai.metrica.pro/v1` with the GLM 5.3 family as the primary model
-mapping. See [the parity note](../research/grok-claude-parity-p4b.md) for the
-environment mapping and for what the runs do and do not establish.
+The reference harness is Claude Code driven through AO's `claudeacp` binding,
+run on its standing reference configuration: the GLM 5.3 family over the
+Anthropic-compatible gateway at `https://ai.metrica.pro/v1`. The reproducible
+environment block, and why a gateway route is a supported configuration rather
+than a substitution, are in
+[the Claude Code harness doc](claude-code.md#standing-reference-configuration-glm-53-over-the-anthropic-compatible-gateway).
+[The parity note](../research/grok-claude-parity-p4b.md) records what the runs
+do and do not establish.
 
 ## Review Mode
 

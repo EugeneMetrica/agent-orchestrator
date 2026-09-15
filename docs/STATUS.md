@@ -128,6 +128,48 @@ surface (`npm run sqlc`, `npm run api`).
 - OpenAPI spec generated from Go DTOs; frontend TS types generated from it and
   drift-checked in CI.
 
+#### Claude Code (model routing and reference role)
+
+Full harness notes — install, PATH resolution, auth signals, and the routing
+details below — are in
+[the Claude Code harness doc](harnesses/claude-code.md).
+
+- **Route ownership**: Claude Code speaks the Anthropic Messages protocol, and
+  that protocol is the contract AO's binding depends on. Where those requests go
+  belongs to the operator's Claude Code installation; AO configures no route and
+  forwards the project environment through unchanged.
+- **Standing reference configuration**: AO's live Claude Code runs — the G4
+  parity reference today, and the assumed pattern for future live Claude runs —
+  use the Anthropic-compatible gateway at `https://ai.metrica.pro/v1` with the
+  GLM 5.3 family mapped onto Claude Code's aliases:
+
+  ```json
+  {
+    "env": {
+      "ANTHROPIC_BASE_URL": "https://ai.metrica.pro/v1",
+      "ANTHROPIC_AUTH_TOKEN": "<gateway key>",
+      "ANTHROPIC_DEFAULT_OPUS_MODEL": "glm-5.3",
+      "ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-5.3-flash"
+    }
+  }
+  ```
+
+  This is a supported configuration rather than a substitution for one test
+  session: AO already names this class of route (`api.z.ai` → the `zai` billing
+  provider in `claudeHookProviderHint`) and prices both `glm-5.3` and
+  `glm-5.3-flash` in `pricing/catalog/v1/providers/zai`. A gateway host AO
+  cannot name is recorded as `unidentified`, which affects cost attribution only
+  and not the harness contract.
+- **Reference role**: a new Chat binding's live scenarios run against Claude
+  Code from the same shared scenario bodies, which is what separates "the new
+  binding is broken" from "this AO surface never worked for any ACP harness".
+  Gates: `AO_CHAT_E2E=1 AO_LIVE_CLAUDE_ACP=1 go test ./e2e/ -run ChatReference`
+  and, for the UI, `AO_LIVE_CLAUDE_ACP=1
+  CLAUDE_ROUTER_URL=https://ai.metrica.pro/v1 npx playwright test
+  chat-reference-e2e`. `CLAUDE_ROUTER_URL` is never read by AO; it is the
+  operator's statement that the gateway was configured, so an unconfigured
+  machine skips instead of passing as a reference run.
+
 #### Grok (xAI Grok Build)
 
 Full harness notes — install, PATH resolution, modes, permission mapping, and
@@ -176,18 +218,14 @@ the live gates — are in [the Grok harness doc](harnesses/grok.md).
   named by `AO_E2E_LIVE_PROJECT` needs a resolvable default branch, because one
   still reporting `auto` fails at session spawn before any UI assertion runs.
 - **What the reference run establishes**: the reference harness is Claude Code
-  driven through AO's `claudeacp` binding. Which models answer behind it is the
-  operator's own Claude Code configuration, not AO's. On this stack that is the
-  canonical mapping for Claude Code: the Anthropic-compatible gateway at
-  `https://ai.metrica.pro/v1` with the GLM 5.3 family as the primary models
-  (`ANTHROPIC_DEFAULT_OPUS_MODEL=glm-5.3`,
-  `ANTHROPIC_DEFAULT_SONNET_MODEL=glm-5.3-flash`). AO already treats this class
-  of route as first-class — the Claude hook route hint maps `api.z.ai` to the
-  `zai` billing provider, and `pricing/catalog/v1/providers/zai` prices
-  `glm-5.3` and `glm-5.3-flash`. The parity claim is therefore about the harness
-  contract, which is what the Anthropic wire protocol carries and what both runs
-  exercised; it is not a claim that the two harnesses produce identical prose.
-  Scope and method: [the parity note](research/grok-claude-parity-p4b.md).
+  driven through AO's `claudeacp` binding, on the standing reference
+  configuration described under
+  [Claude Code](#claude-code-model-routing-and-reference-role) — the GLM 5.3
+  family over the Anthropic-compatible gateway. The parity claim is therefore
+  about the harness contract, which is what the Anthropic wire protocol carries
+  and what both runs exercised; it is not a claim that the two harnesses produce
+  identical prose. Scope and method:
+  [the parity note](research/grok-claude-parity-p4b.md).
 
 ### Frontend (Electron + React)
 
