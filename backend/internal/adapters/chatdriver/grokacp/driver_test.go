@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	acpsdk "github.com/coder/acp-go-sdk"
+
 	acpdriver "github.com/aoagents/agent-orchestrator/backend/internal/adapters/chatdriver/acp"
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
@@ -261,4 +263,34 @@ func (p *fakePlugin) ResolveBinary(context.Context) (string, error) {
 func (p *fakePlugin) AuthStatus(context.Context) (ports.AgentAuthStatus, error) {
 	p.authCalls++
 	return p.status, nil
+}
+
+func TestPermissionPolicyAutoApprovesBypassAndAuto(t *testing.T) {
+	allowOnce := acpsdk.PermissionOption{
+		OptionId: "allow-once", Kind: acpsdk.PermissionOptionKindAllowOnce, Name: "Allow once",
+	}
+	allowAlways := acpsdk.PermissionOption{
+		OptionId: "allow-always", Kind: acpsdk.PermissionOptionKindAllowAlways, Name: "Allow always",
+	}
+	execute := acpsdk.ToolKindExecute
+	params := acpsdk.RequestPermissionRequest{
+		ToolCall: acpsdk.ToolCallUpdate{Kind: &execute},
+		Options:  []acpsdk.PermissionOption{allowOnce, allowAlways},
+	}
+	for _, mode := range []ports.PermissionMode{
+		ports.PermissionModeBypassPermissions, ports.PermissionModeAuto,
+	} {
+		id, ok := permissionPolicy(mode, params)
+		if !ok || id != "allow-always" {
+			t.Fatalf("permissionPolicy(%q) = %q, %v; want allow-always, true", mode, id, ok)
+		}
+	}
+	id, ok := permissionPolicy(ports.PermissionModeAcceptEdits, params)
+	if ok {
+		t.Fatalf("accept-edits should not auto-approve execute tools, got %q", id)
+	}
+	id, ok = permissionPolicy(ports.PermissionModeDefault, params)
+	if ok {
+		t.Fatalf("default should park for the user, got %q", id)
+	}
 }

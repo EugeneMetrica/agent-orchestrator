@@ -1,6 +1,7 @@
 package acp
 
 import (
+	"context"
 	"testing"
 
 	acpsdk "github.com/coder/acp-go-sdk"
@@ -136,3 +137,77 @@ func TestApplyAcceptedConfigOptionIgnoresUnknownID(t *testing.T) {
 }
 
 func boolPtr(v bool) *bool { return &v }
+
+// GET .../conversation/models reads ChatModelLister, not config-options. ACP
+// already holds the provider catalog as the "model" select; projecting it is
+// what lets Chat pickers (and the Grok e2e override test) see the same list
+// session/new advertised.
+func TestListModelsProjectsAdvertisedModelOption(t *testing.T) {
+	c := &conversation{capabilities: make(ports.ChatCapabilities)}
+	c.replaceConfigOptions([]acpsdk.SessionConfigOption{
+		selectOption("model", "Model", "grok-4.6", "grok-4.5", "grok-4.6"),
+		selectOption("effort", "Effort", "high", "high", "low"),
+	})
+
+	models, err := c.ListModels(context.Background())
+	if err != nil {
+		t.Fatalf("ListModels: %v", err)
+	}
+	if len(models) != 2 {
+		t.Fatalf("got %d models, want 2: %#v", len(models), models)
+	}
+	byID := map[string]ports.ChatModel{}
+	for _, model := range models {
+		byID[model.ID] = model
+	}
+	if got := byID["grok-4.6"]; !got.Default || got.DisplayName != "grok-4.6" {
+		t.Fatalf("current model = %#v, want default with matching display name", got)
+	}
+	if got := byID["grok-4.5"]; got.Default || got.DisplayName != "grok-4.5" {
+		t.Fatalf("other model = %#v, want non-default", got)
+	}
+}
+
+func TestListModelsReturnsEmptyWhenNoModelOption(t *testing.T) {
+	c := &conversation{capabilities: make(ports.ChatCapabilities)}
+	c.replaceConfigOptions([]acpsdk.SessionConfigOption{
+		selectOption("effort", "Effort", "high", "high", "low"),
+	})
+
+	models, err := c.ListModels(context.Background())
+	if err != nil {
+		t.Fatalf("ListModels: %v", err)
+	}
+	if len(models) != 0 {
+		t.Fatalf("got %d models, want 0 when no model option is advertised", len(models))
+	}
+}
+
+func TestListModelsProjectsLegacySessionModels(t *testing.T) {
+	c := &conversation{
+		capabilities: make(ports.ChatCapabilities),
+		configOptions: normalizeSessionOptions(nil, &legacySessionModelState{
+			CurrentModelID: "grok-4.6",
+			Available: []legacyModelInfo{
+				{ModelID: "grok-4.5", Name: "Grok 4.5"},
+				{ModelID: "grok-4.6", Name: "Grok 4.6"},
+			},
+		}, nil),
+	}
+
+	models, err := c.ListModels(context.Background())
+	if err != nil {
+		t.Fatalf("ListModels: %v", err)
+	}
+	if len(models) != 2 {
+		t.Fatalf("got %d models from legacy session/new models, want 2: %#v", len(models), models)
+	}
+	for _, model := range models {
+		if model.ID == "grok-4.6" && (!model.Default || model.DisplayName != "Grok 4.6") {
+			t.Fatalf("legacy current model = %#v", model)
+		}
+		if model.ID == "grok-4.5" && (model.Default || model.DisplayName != "Grok 4.5") {
+			t.Fatalf("legacy other model = %#v", model)
+		}
+	}
+}

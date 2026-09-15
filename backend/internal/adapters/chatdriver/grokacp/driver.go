@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"strings"
 
+	acpsdk "github.com/coder/acp-go-sdk"
+
 	acpdriver "github.com/aoagents/agent-orchestrator/backend/internal/adapters/chatdriver/acp"
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/chatdriver/nativeacp"
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
@@ -19,11 +21,12 @@ import (
 // launch-time permission mode and model override.
 func New(plugin nativeacp.Plugin, log *slog.Logger) ports.ChatDriver {
 	return nativeacp.New(plugin, nativeacp.Config{
-		Harness:        domain.HarnessGrok,
-		Configure:      configure,
-		SessionMeta:    sessionMeta,
-		SessionMode:    sessionMode,
-		SessionOptions: sessionOptions,
+		Harness:          domain.HarnessGrok,
+		Configure:        configure,
+		SessionMeta:      sessionMeta,
+		SessionMode:      sessionMode,
+		SessionOptions:   sessionOptions,
+		PermissionPolicy: permissionPolicy,
 	}, log)
 }
 
@@ -100,6 +103,48 @@ func sessionMode(permissions ports.PermissionMode) string {
 	default:
 		return ""
 	}
+}
+
+// permissionPolicy resolves mid-session approvalMode changes that Grok still
+// surfaces as session/request_permission. Launch-time bypass uses
+// --always-approve so Grok never asks; a PATCH to bypass-permissions after an
+// accept-edits spawn only gets SetSessionMode, and Grok keeps asking the client.
+// Without a policy AO parks those requests forever, which is exactly what the
+// Chat API approval-mode override must not do.
+func permissionPolicy(
+	mode ports.PermissionMode,
+	params acpsdk.RequestPermissionRequest,
+) (acpsdk.PermissionOptionId, bool) {
+	mode = ports.NormalizePermissionMode(mode)
+	if mode == ports.PermissionModeAcceptEdits {
+		kind := acpsdk.ToolKind("")
+		if params.ToolCall.Kind != nil {
+			kind = *params.ToolCall.Kind
+		}
+		if kind != acpsdk.ToolKindEdit && kind != acpsdk.ToolKindDelete && kind != acpsdk.ToolKindMove {
+			return "", false
+		}
+		return permissionOption(params.Options, acpsdk.PermissionOptionKindAllowOnce)
+	}
+	if mode == ports.PermissionModeAuto || mode == ports.PermissionModeBypassPermissions {
+		if id, ok := permissionOption(params.Options, acpsdk.PermissionOptionKindAllowAlways); ok {
+			return id, true
+		}
+		return permissionOption(params.Options, acpsdk.PermissionOptionKindAllowOnce)
+	}
+	return "", false
+}
+
+func permissionOption(
+	options []acpsdk.PermissionOption,
+	kind acpsdk.PermissionOptionKind,
+) (acpsdk.PermissionOptionId, bool) {
+	for _, option := range options {
+		if option.Kind == kind {
+			return option.OptionId, true
+		}
+	}
+	return "", false
 }
 
 // sessionOptions forwards the durable model choice verbatim, exactly as the TUI

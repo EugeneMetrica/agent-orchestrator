@@ -145,6 +145,12 @@ surface (`npm run sqlc`, `npm run api`).
 - **Live test**: `AO_LIVE_GROK_ACP=1 go test ./internal/adapters/chatdriver/grokacp/...`
   (skipped unless the gate is set; it spends real Grok account usage). Covers the
   session smoke, the permission-mode matrix, and terminate/resume.
+- **API E2E**: `AO_CHAT_E2E=1 AO_LIVE_GROK_ACP=1 go test ./e2e/ -run ChatGrok`
+  drives spawn, model override, reasoning effort, per-turn approval override,
+  staged attachments, and combined server state through the daemon's HTTP routes
+  (`backend/e2e/chat_grok_test.go`). The same model-override and attachment
+  scenarios run against Claude Code as a parity reference under
+  `AO_LIVE_CLAUDE_ACP=1`.
 
 ### Frontend (Electron + React)
 
