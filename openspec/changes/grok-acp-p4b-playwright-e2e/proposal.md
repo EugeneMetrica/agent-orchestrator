@@ -56,7 +56,7 @@ Create Playwright E2E tests that:
 | Gate | Description | Waiver |
 |------|-------------|--------|
 | G1 | Independent deep review → review note PASS/FAIL in `reviews/` | Required |
-| G2 | Full suite: gofmt, go build/vet, `go test -race ./...`, npm run lint / golangci-lint v2.12.2 | Required |
+| G2 | Full suite: gofmt, go build/vet, `go test -race ./...`, mise run lint / golangci-lint v2.13.2 (pinned in mise.toml) | Required |
 | G3 | Live Playwright: `AO_LIVE_GROK_ACP=1` UI tests with file proof | Required |
 | G4 | Claude Code reference: same suite via ai.metrica.pro router | Required |
 

@@ -32,7 +32,9 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25"
+          # Read the version from go.mod like every other Go job, so this matrix
+          # can't drift behind the module (it pinned 1.25 while go.mod moved on).
+          go-version-file: backend/go.mod
           cache: false
 
       - name: CLI E2E (native)

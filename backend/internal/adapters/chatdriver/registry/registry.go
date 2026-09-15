@@ -14,6 +14,7 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/agent/codex"
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/agent/cursor"
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/agent/droid"
+	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/agent/grok"
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/agent/kimchi"
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/agent/kimi"
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/agent/omp"
@@ -23,6 +24,7 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/chatdriver/codexappserver"
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/chatdriver/cursoracp"
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/chatdriver/droidacp"
+	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/chatdriver/grokacp"
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/chatdriver/kimchiacp"
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/chatdriver/kimiacp"
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/chatdriver/ompacp"
@@ -56,7 +58,7 @@ func New(drivers ...ports.ChatDriver) *Registry {
 //
 // Codex uses its native app-server protocol. Claude Code uses AO's reusable ACP
 // transport plus claude-agent-acp, pointed at the user's own Claude executable.
-// Cursor, OpenCode, Droid, Kimi, Kimchi, Pi, and OMP expose ACP themselves, so AO
+// Cursor, OpenCode, Droid, Kimi, Kimchi, Pi, OMP, and Grok expose ACP themselves, so AO
 // launches the exact executable resolved by each existing agent plugin. No path
 // scrapes terminal output or packages a second provider CLI.
 //
@@ -74,6 +76,7 @@ func Build(log *slog.Logger) *Registry {
 		piacp.New(pi.New(), log),
 		cursoracp.New(cursor.New(), log),
 		ompacp.New(omp.New(), log),
+		grokacp.New(grok.New(), log),
 	)
 }
 

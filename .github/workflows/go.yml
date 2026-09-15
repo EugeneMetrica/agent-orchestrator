@@ -130,16 +130,28 @@ jobs:
           go-version-file: backend/go.mod
           cache: false
 
+      - name: Resolve pinned golangci-lint version
+        id: golangci-version
+        # mise.toml holds the single pin; `mise run lint` is the local gate and
+        # uses the same line, so CI and the local loop cannot drift apart. The
+        # pin is bumped intentionally rather than letting an upstream release
+        # change CI, and must be built with Go >= the module's language version
+        # (go.mod is 1.27): v2.13.2 is built with go1.27, while older tags such
+        # as v2.12.2 are built with go1.25 and refuse to analyze 1.27 code.
+        run: |
+          pin=$(sed -n 's/^golangci-lint = "\(.*\)"$/\1/p' mise.toml)
+          if [ -z "$pin" ]; then
+            echo "No golangci-lint pin found in mise.toml; refusing to lint with an unpinned version." >&2
+            exit 1
+          fi
+          echo "version=v$pin" >> "$GITHUB_OUTPUT"
+
       - name: golangci-lint
         # v8 of the action drives golangci-lint v2 (the schema this config uses);
         # the v6 action speaks v1 CLI flags and errors against a v2 binary.
         uses: golangci/golangci-lint-action@v8
         with:
-          # Pinned for reproducibility: bump intentionally rather than letting an
-          # upstream release change CI. Must be built with Go >= the module's
-          # (go.mod is 1.25); v2.12.2 is built with go1.25 — older v2 tags
-          # (e.g. v2.1.x) are built with go1.24 and refuse to analyze 1.25 code.
-          version: v2.12.2
+          version: ${{ steps.golangci-version.outputs.version }}
           working-directory: backend
           # Blocking on the full ruleset: the tree is clean at zero findings, so
           # any new issue fails CI rather than being grandfathered.

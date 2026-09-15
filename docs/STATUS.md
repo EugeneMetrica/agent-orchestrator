@@ -17,7 +17,8 @@ The local gate is the backend Go build and race-enabled test suite:
 cd backend && go build ./... && go test -race ./...
 ```
 
-`npm run lint` (from the repo root) runs `go test ./...` plus golangci-lint.
+`mise run lint` (from the repo root) runs golangci-lint at the version pinned in
+`mise.toml`, the same pin CI uses.
 Frontend checks live under `frontend/` (`npm run typecheck`, `npm run build`).
 See [`AGENTS.md`](../AGENTS.md) for the regen workflow when touching the API
 surface (`npm run sqlc`, `npm run api`).

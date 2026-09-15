@@ -1,0 +1,13 @@
+# Toolchain source of truth. CI reads the Go version from go.mod via setup-go's
+# go-version-file and the golangci-lint pin from this file (see the `lint` job in
+# .github/workflows/go.yml), so the local gate and CI lint with one build.
+[tools]
+go = "1.27.1"
+golangci-lint = "2.13.2"
+
+# The lint gate, local and in CI: `mise run lint`. There is no second install
+# path — `mise exec -- golangci-lint …` reaches the same pinned binary.
+[tasks.lint]
+description = "Lint the Go backend with the pinned golangci-lint"
+dir = "backend"
+run = "golangci-lint run --path-mode=abs"

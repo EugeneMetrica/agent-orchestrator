@@ -165,7 +165,7 @@ Document:
 ## Task 4b.11: Run Full CI Suite
 
 ```bash
-npm run lint
+mise run lint
 npm run frontend:typecheck
 cd backend && go test ./... && go test -race ./...
 ```
@@ -182,7 +182,6 @@ cd backend && go test ./... && go test -race ./...
 - [ ] Review verdict: PASS or FAIL with rationale
 
 ### G2: Full CI Suite
-- [ ] `npm run lint` passes
 - [ ] `npm run frontend:typecheck` passes
 - [ ] Backend tests pass
 

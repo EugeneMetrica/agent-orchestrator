@@ -51,7 +51,7 @@ on every daemon restart.
 | Gate | Description | Waiver |
 |------|-------------|--------|
 | G1 | Independent deep review → review note PASS/FAIL in `reviews/` | Required |
-| G2 | Full suite: gofmt, go build/vet, `go test -race ./...`, npm run lint / golangci-lint v2.12.2 | Required |
+| G2 | Full suite: gofmt, go build/vet, `go test -race ./...`, mise run lint / golangci-lint v2.13.2 (pinned in mise.toml) | Required |
 | G3 | Live resume test: file proof before/after terminate | Required |
 | G4 | AO frontend: session survives daemon restart with history | Required |
 

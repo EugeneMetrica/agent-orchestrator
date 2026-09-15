@@ -91,17 +91,17 @@ func TestChatGrokModelOverride(t *testing.T) {
     var settings ConversationTurnSettingsPayload
     d.mustCall("PATCH", "/sessions/"+session+"/conversation/settings",
         http.StatusOK,
-        map[string]any{"model": "xai/grok-3"},
+        map[string]any{"model": "grok-4.5"},
         &settings)
 
-    if settings.Model != "xai/grok-3" {
-        t.Errorf("settings.model = %q, want xai/grok-3", settings.Model)
+    if settings.Model != "grok-4.5" {
+        t.Errorf("settings.model = %q, want grok-4.5", settings.Model)
     }
 
     // Verify GET returns same
     conv := d.conversation(session)
-    if conv.Settings.Model != "xai/grok-3" {
-        t.Errorf("conversation settings.model = %q, want xai/grok-3",
+    if conv.Settings.Model != "grok-4.5" {
+        t.Errorf("conversation settings.model = %q, want grok-4.5",
             conv.Settings.Model)
     }
 
@@ -114,7 +114,7 @@ func TestChatGrokModelOverride(t *testing.T) {
         })
 
     // Model should be recorded
-    if snap.Settings.Model != "xai/grok-3" {
+    if snap.Settings.Model != "grok-4.5" {
         t.Errorf("recorded model = %q", snap.Settings.Model)
     }
 }

@@ -19,7 +19,7 @@ driver works end-to-end with a real Grok CLI installation.
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│  grok agent --no-auto-update stdio                                   │
+│  grok --no-auto-update agent stdio                                   │
 │    → Real Grok CLI process                                          │
 │    → Uses user's ~/.grok credentials                                │
 │    → Executes shell command to create proof.txt                     │

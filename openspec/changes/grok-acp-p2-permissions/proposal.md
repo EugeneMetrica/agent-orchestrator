@@ -51,7 +51,7 @@ Without testing each mode against real Grok, permission mapping bugs could cause
 | Gate | Description | Waiver |
 |------|-------------|--------|
 | G1 | Independent deep review → review note PASS/FAIL in `reviews/` | Required |
-| G2 | Full suite: gofmt, go build/vet, `go test -race ./...`, npm run lint / golangci-lint v2.12.2 | Required |
+| G2 | Full suite: gofmt, go build/vet, `go test -race ./...`, mise run lint / golangci-lint v2.13.2 (pinned in mise.toml) | Required |
 | G3 | Live permission matrix: all 4 modes create proof files | Required |
 | G4 | AO frontend: verify mode selector affects session behavior | Required |
 

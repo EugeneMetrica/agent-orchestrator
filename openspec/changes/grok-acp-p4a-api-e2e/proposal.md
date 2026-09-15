@@ -56,7 +56,7 @@ Create `backend/e2e/chat_grok_test.go` with tests covering:
 | Gate | Description | Waiver |
 |------|-------------|--------|
 | G1 | Independent deep review → review note PASS/FAIL in `reviews/` | Required |
-| G2 | Full suite: gofmt, go build/vet, `go test -race ./...`, npm run lint / golangci-lint v2.12.2 | Required |
+| G2 | Full suite: gofmt, go build/vet, `go test -race ./...`, mise run lint / golangci-lint v2.13.2 (pinned in mise.toml) | Required |
 | G3 | Live API E2E: `AO_LIVE_GROK_ACP=1` tests with file/worktree proof | Required |
 | G4 | Reference comparison: same tests pass for Claude Code (when available) | Required |
 

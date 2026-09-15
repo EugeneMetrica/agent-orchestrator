@@ -30,17 +30,17 @@ The UI model selector SHALL apply model changes to the engine session.
 
 **GIVEN** an active Grok Chat session in the UI
 **WHEN** the user clicks the model dropdown
-**AND** selects "xai/grok-3"
+**AND** selects "grok-4.5"
 **THEN** the UI shows the selected model
-**AND** the next turn uses model "xai/grok-3"
-**AND** GET /conversation shows `settings.model == "xai/grok-3"`
+**AND** the next turn uses model "grok-4.5"
+**AND** GET /conversation shows `settings.model == "grok-4.5"`
 
 #### Scenario: Model switch not ignored (regression prevention)
 
 **GIVEN** an active session with model "xai/grok-2"
-**WHEN** user switches model to "xai/grok-3" via UI
+**WHEN** user switches model to "grok-4.5" via UI
 **AND** sends a new message
-**THEN** the engine processes with "xai/grok-3"
+**THEN** the engine processes with "grok-4.5"
 **AND** the conversation state reflects the new model
 **AND** the change is NOT silently ignored
 

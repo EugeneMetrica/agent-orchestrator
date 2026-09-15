@@ -43,7 +43,7 @@ If Grok requires `_meta.rules` or `_meta.yoloMode`:
 
 ```bash
 # From repo root
-npm run lint
+mise run lint
 
 # Backend specific
 cd backend
@@ -109,8 +109,7 @@ Manual verification:
 - [ ] `go vet ./...` passes
 - [ ] `go test ./...` passes (live tests skip)
 - [ ] `go test -race ./...` passes
-- [ ] `golangci-lint run` passes (v2.12.2)
-- [ ] `npm run lint` passes
+- [ ] `mise run lint` passes (golangci-lint v2.13.2)
 
 ### G3: Live Resume Test
 - [ ] `AO_LIVE_GROK_ACP=1` set

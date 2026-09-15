@@ -15,7 +15,8 @@ Operational guidance for coding agents working in this repository. Keep changes 
 From the repo root unless noted:
 
 ```bash
-npm run lint                         # backend go test ./... + golangci-lint v2.12.2
+mise run lint                        # lint gate: golangci-lint pinned in mise.toml, the same pin CI reads
+cd backend && go test ./...          # backend Go suite (mise provides the pinned Go)
 npm run frontend:typecheck           # frontend TypeScript check
 npm run sqlc                         # regenerate backend/internal/storage/sqlite/gen from queries/schema
 npm run api                          # regenerate OpenAPI spec + frontend TS types (see API contract changes below)

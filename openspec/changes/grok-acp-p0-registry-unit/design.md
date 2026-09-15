@@ -55,22 +55,25 @@ import (
 // Grok agent plugin. AO adds only per-session permission mode and model override.
 func New(plugin nativeacp.Plugin, log *slog.Logger) ports.ChatDriver {
     return nativeacp.New(plugin, nativeacp.Config{
-        Harness:              domain.HarnessGrok,
-        Configure:            configure,
-        SessionMode:          sessionMode,
-        SessionOptions:       sessionOptions,
-        ValidateTurnSettings: validateTurnSettings,
+        Harness:        domain.HarnessGrok,
+        Configure:      configure,
+        SessionMeta:    sessionMeta,
+        SessionMode:    sessionMode,
+        SessionOptions: sessionOptions,
     }, log)
 }
 ```
 
 ### configure Function
 
-Constructs spawn args for `grok agent [--always-approve] [--model M] [--no-auto-update] stdio`:
+Constructs spawn args for `grok --no-auto-update agent [--always-approve] [--model M] stdio`:
 
 ```go
 func configure(ctx context.Context, cfg acpdriver.LaunchConfig) ([]string, map[string]string, error) {
-    args := []string{"agent", "--no-auto-update"}
+    // --no-auto-update is a global flag, so it precedes the subcommand exactly
+    // as the TUI adapter passes it. Standing instructions are not on the argv:
+    // see "System prompt: ACP _meta.rules, not argv --rules" below.
+    args := []string{"--no-auto-update", "agent"}
 
     // Bypass-permissions mode → --always-approve CLI flag
     if ports.NormalizePermissionMode(cfg.Permissions) == ports.PermissionModeBypassPermissions {
@@ -84,6 +87,22 @@ func configure(ctx context.Context, cfg acpdriver.LaunchConfig) ([]string, map[s
 
     args = append(args, "stdio")
     return args, nil, nil
+}
+```
+
+### sessionMeta Function
+
+Carries AO's standing instructions in the ACP session metadata Grok's agent mode
+reads. Returns `nil` for an empty or whitespace-only prompt so the request has no
+`rules` key at all:
+
+```go
+func sessionMeta(cfg acpdriver.LaunchConfig) map[string]any {
+    prompt := strings.TrimSpace(cfg.SystemPrompt)
+    if prompt == "" {
+        return nil
+    }
+    return map[string]any{"rules": prompt}
 }
 ```
 
@@ -106,21 +125,20 @@ func sessionMode(permissions ports.PermissionMode) string {
 }
 ```
 
-### validateTurnSettings Function
+### Model IDs: no format validation
 
-Validates model format (must be `provider/model`):
+The binding installs no `ValidateTurnSettings` model gate and keeps no Grok model
+list. AO already learns Grok's models from the installation: `modelcatalog` runs
+`grok models` and `parseGrokModels` yields bare ids (`grok-code-fast`,
+`grok-4.5`), which is also what the TUI adapter passes to `--model`. A
+`provider/model` requirement would reject every one of them. The id is forwarded
+verbatim through `sessionOptions`, and the shared `acp` transport rejects ids the
+ACP session does not advertise:
 
 ```go
-func validateTurnSettings(_ ports.PermissionMode, settings ports.ChatTurnSettings) error {
-    if settings.Model == "" {
-        return nil
-    }
-    provider, model, found := strings.Cut(settings.Model, "/")
-    if !found || strings.TrimSpace(provider) == "" || strings.TrimSpace(model) == "" {
-        return fmt.Errorf("%w: Grok model %q must use provider/model format "+
-            "(for example, xai/grok-3); select a full model ID from `grok models`, "+
-            "or clear the model override to use Agent default",
-            ports.ErrChatConfigOptionInvalid, settings.Model)
+func sessionOptions(settings ports.ChatTurnSettings) []acpdriver.SessionOption {
+    if model := strings.TrimSpace(settings.Model); model != "" {
+        return []acpdriver.SessionOption{{ID: "model", Value: model}}
     }
     return nil
 }
@@ -164,13 +182,17 @@ Unit tests covering the Grok-specific binding only (not shared nativeacp logic):
 | Test | Coverage |
 |------|----------|
 | `TestHarness` | `driver.Harness() == domain.HarnessGrok` |
-| `TestConfigure_DefaultPermissions` | Returns `agent --no-auto-update stdio` |
+| `TestConfigure_DefaultPermissions` | Returns `--no-auto-update agent stdio` |
 | `TestConfigure_BypassPermissions` | Includes `--always-approve` |
-| `TestConfigure_ModelOverride` | Includes `--model xai/grok-3` |
+| `TestConfigure_ModelOverride` | Includes `--model grok-code-fast` |
+| `TestConfigureNeverPutsRulesOnArgv` | No `--rules` on the argv for any prompt |
+| `TestSessionMetaDeliversStandingInstructionsAsRules` | `_meta` carries `rules: <prompt>` |
+| `TestSessionMetaTrimsAndOmitsBlankStandingInstructions` | Prompt trimmed; blank yields `nil` meta |
+| `TestBindingForwardsSessionMetaToTransport` (`nativeacp`) | `nativeacp.Config.SessionMeta` reaches `acpdriver.Config` |
 | `TestSessionMode_Mapping` | Each permission mode maps correctly |
-| `TestValidateTurnSettings_ValidModel` | `xai/grok-3` passes |
-| `TestValidateTurnSettings_InvalidModel` | `grok-3` fails with correct error |
-| `TestValidateTurnSettings_EmptyModel` | Empty string passes |
+| `TestSessionOptions_ModelForwarded` | Bare and qualified ids forward verbatim |
+| `TestSessionOptions_EmptyModel` | Empty/blank model yields no option |
+| `TestBareModelReachesLaunch` | `grok-code-fast` is not rejected by AO |
 
 ## Quality Gates
 
@@ -199,11 +221,62 @@ grok --no-auto-update [--permission-mode <mode>] [--model <model>] [--rules <tex
 
 Chat mode (new ACP):
 ```
-grok agent --no-auto-update [--always-approve] [--model <model>] stdio
+grok --no-auto-update agent [--always-approve] [--model <model>] stdio
 ```
 
 Key differences:
 - `agent` subcommand enables ACP mode
 - `stdio` subcommand selects JSON-RPC transport
 - `--always-approve` replaces TUI's `--permission-mode bypassPermissions`
-- `--rules` not used (system prompt via ACP `session/new` metadata)
+- TUI takes AO's standing instructions on the argv as `--rules`; agent mode takes
+  them in ACP session metadata instead (see below)
+
+## System prompt: ACP `_meta.rules`, not argv `--rules`
+
+`--rules` is **not** a global flag that agent mode forwards. In grok-build only
+the TUI and `-p` paths read it; `grok … agent stdio` accepts it on the command
+line and then ignores it. An argv-borne `--rules` therefore looks like delivery
+while dropping AO's standing instructions silently — there is no error and no
+warning, which is exactly what makes it worth calling out here.
+
+Agent mode takes appended standing instructions through the ACP session's
+`_meta`, under the key `rules` (the key name is Grok's, not AO's). Grok folds
+that value into the `<human_rules>` section of the system prompt its own
+installation configures, so AO's instructions are appended and never replace the
+user's.
+
+The shared `acp` transport already sends `Config.SessionMeta` on every request
+that creates the provider-side session object — `session/new`, `session/load`,
+and `session/resume` — so a recovered conversation receives the standing context
+again rather than relying on replayed transcript history.
+
+`nativeacp.Config` did not expose that hook, which is the gap this phase closes.
+The addition is a field and one assignment in `buildConfig`; the shared transport
+and every other native binding are unchanged, and a binding that sets no
+`SessionMeta` still sends no metadata:
+
+```go
+// nativeacp.Config
+SessionMeta func(acpdriver.LaunchConfig) map[string]any
+
+// nativeacp.buildConfig → acpdriver.Config
+SessionMeta: cfg.SessionMeta,
+```
+
+The Grok binding supplies it, and `configure` stays free of the prompt:
+
+```go
+args := []string{"--no-auto-update", "agent"}
+// … --always-approve / --model / stdio only
+
+func sessionMeta(cfg acpdriver.LaunchConfig) map[string]any {
+    prompt := strings.TrimSpace(cfg.SystemPrompt)
+    if prompt == "" {
+        return nil
+    }
+    return map[string]any{"rules": prompt}
+}
+```
+
+Returning `nil` for a blank prompt is deliberate: the request then carries no
+`rules` key, rather than an empty one Grok would have to interpret.

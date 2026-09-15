@@ -54,7 +54,7 @@ pass all unit tests yet fail immediately when a user tries Chat mode.
 | Gate | Description | Waiver |
 |------|-------------|--------|
 | G1 | Independent deep review → review note PASS/FAIL in `reviews/` | Required |
-| G2 | Full suite: gofmt, go build/vet, `go test -race ./...`, npm run lint / golangci-lint v2.12.2 | Required |
+| G2 | Full suite: gofmt, go build/vet, `go test -race ./...`, mise run lint / golangci-lint v2.13.2 (pinned in mise.toml) | Required |
 | G3 | Live mini-task: `AO_LIVE_GROK_ACP=1` test with **proof.txt on disk** | Required |
 | G4 | AO frontend/CLI UI: session harness=grok, timeline shows turn | Required |
 
