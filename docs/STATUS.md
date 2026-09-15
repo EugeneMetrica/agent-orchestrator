@@ -74,6 +74,13 @@ surface (`npm run sqlc`, `npm run api`).
   probe and is never downloaded by AO. AO reuses each harness's existing
   binary/auth/environment resolution and does not bundle provider CLIs. Cursor
   is Chat-only until its ACP and TUI conversation ids are proven to share identity.
+- Claude Code's pre-session model picker lists its alias snapshot plus the
+  concrete ids the Opus/Sonnet/Haiku aliases route to, read from
+  `ANTHROPIC_DEFAULT_*_MODEL` in the environment or a `.claude/settings*.json`
+  `env` block. Gateway-backed setups (Z.ai / metrica Claude Code, where Opus is
+  `glm-5.3` and Sonnet is `glm-5.3-flash`) are therefore selectable before spawn
+  and apply to Chat sessions; the gateway URL and token stay in Claude Code's own
+  settings. See [harnesses/claude-code-glm.md](harnesses/claude-code-glm.md).
 - Project CRUD plus per-project config (`PUT /projects/{id}/config`).
 - PR action engine wired into the API: `POST /prs/{id}/merge` and
   `/prs/{id}/resolve-comments`.

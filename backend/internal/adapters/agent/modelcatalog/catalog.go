@@ -180,20 +180,63 @@ func claudeCodeModels() []ports.AgentModelInfo {
 	}
 }
 
-// discoverClaudeCatalog returns the static Claude Code catalog, marking the row
-// matching the project/user configured model as default. The list is static, so
-// discovery never fails and never launches the Agent SDK or an interactive
-// Claude client.
+// claudeAliasDefaults describes each Claude Code alias AO can resolve to a
+// concrete model id: the environment/settings key Claude Code reads to override
+// what the alias routes to, plus the id AO keeps selectable when no override is
+// present. The fallback ids are the Z.ai / metrica Claude Code gateway models
+// (Opus -> glm-5.3, Sonnet -> glm-5.3-flash); the gateway base URL and
+// credentials stay in Claude Code's own settings and are never read here.
+var claudeAliasDefaults = []struct {
+	alias    string
+	envKey   string
+	fallback string
+}{
+	{alias: "Opus", envKey: "ANTHROPIC_DEFAULT_OPUS_MODEL", fallback: "glm-5.3"},
+	{alias: "Sonnet", envKey: "ANTHROPIC_DEFAULT_SONNET_MODEL", fallback: "glm-5.3-flash"},
+	{alias: "Haiku", envKey: "ANTHROPIC_DEFAULT_HAIKU_MODEL"},
+}
+
+// claudeModelConfig is the Claude Code configuration AO reads to build the
+// picker: the resolved model default plus the alias overrides, keyed by the
+// environment variable that carries each one.
+type claudeModelConfig struct {
+	configured string
+	aliases    map[string]string
+}
+
+// discoverClaudeCatalog returns the static Claude Code catalog plus the concrete
+// model ids its Opus/Sonnet/Haiku aliases route to, marking the row matching the
+// project/user configured model as default. Discovery reads only local
+// configuration, so it never fails and never launches the Agent SDK or an
+// interactive Claude client.
 func discoverClaudeCatalog(request ports.AgentModelDiscoveryRequest) ports.AgentModelCatalog {
+	config := resolveClaudeModelConfig(request.WorkingDir, request.Env)
+	models := append(claudeAliasModels(config), claudeCodeModels()...)
 	base := Base(request.AgentID)
-	base.Models = applyClaudeConfiguredDefault(normalize(claudeCodeModels()), request.WorkingDir, request.Env)
+	base.Models = applyClaudeConfiguredDefault(normalize(models), config.configured)
 	base.Source = "catalog"
 	base.FetchedAt = time.Now().UTC()
 	return base
 }
 
-func applyClaudeConfiguredDefault(models []ports.AgentModelInfo, workingDir string, env map[string]string) []ports.AgentModelInfo {
-	configured := claudeCodeResolvedModel(workingDir, env)
+// claudeAliasModels turns each resolved alias into a selectable picker row. The
+// label carries the alias so the mapping is visible before spawn.
+func claudeAliasModels(config claudeModelConfig) []ports.AgentModelInfo {
+	models := make([]ports.AgentModelInfo, 0, len(claudeAliasDefaults))
+	for _, entry := range claudeAliasDefaults {
+		id := config.aliases[entry.envKey]
+		if id == "" {
+			id = entry.fallback
+		}
+		if id == "" {
+			continue
+		}
+		models = append(models, ports.AgentModelInfo{ID: id, Label: id + " (" + entry.alias + " alias)"})
+	}
+	return models
+}
+
+func applyClaudeConfiguredDefault(models []ports.AgentModelInfo, configured string) []ports.AgentModelInfo {
 	if configured == "" {
 		return models
 	}
@@ -349,16 +392,44 @@ func discoverClineCatalog(
 // documented files are small; a pathological one must not stall discovery.
 const claudeCodeSettingsReadLimit = 1 << 20
 
-// claudeCodeResolvedModel returns the configured Claude Code model, or "" when
-// no scope sets one. Order mirrors Claude Code's own precedence, narrowed to the
-// sources AO can read without running the CLI.
-func claudeCodeResolvedModel(workingDir string, env map[string]string) string {
-	if fromEnv := strings.TrimSpace(env["ANTHROPIC_MODEL"]); fromEnv != "" {
-		return fromEnv
+// resolveClaudeModelConfig reads the Claude Code configuration the picker
+// depends on. Order mirrors Claude Code's own precedence, narrowed to the
+// sources AO can read without running the CLI: the session environment, the
+// daemon process environment, then the project and user settings files.
+func resolveClaudeModelConfig(workingDir string, env map[string]string) claudeModelConfig {
+	config := claudeModelConfig{aliases: make(map[string]string, len(claudeAliasDefaults))}
+	take := func(target *string, value string) {
+		if *target == "" {
+			*target = strings.TrimSpace(value)
+		}
 	}
-	if fromEnv := strings.TrimSpace(os.Getenv("ANTHROPIC_MODEL")); fromEnv != "" {
-		return fromEnv
+	take(&config.configured, env["ANTHROPIC_MODEL"])
+	take(&config.configured, os.Getenv("ANTHROPIC_MODEL"))
+	for _, entry := range claudeAliasDefaults {
+		resolved := config.aliases[entry.envKey]
+		take(&resolved, env[entry.envKey])
+		take(&resolved, os.Getenv(entry.envKey))
+		if resolved != "" {
+			config.aliases[entry.envKey] = resolved
+		}
 	}
+	for _, path := range claudeSettingsCandidates(workingDir) {
+		settings := readClaudeSettings(path)
+		take(&config.configured, settings.Model)
+		for _, entry := range claudeAliasDefaults {
+			resolved := config.aliases[entry.envKey]
+			take(&resolved, settings.Env[entry.envKey])
+			if resolved != "" {
+				config.aliases[entry.envKey] = resolved
+			}
+		}
+	}
+	return config
+}
+
+// claudeSettingsCandidates lists the settings files AO reads, highest
+// precedence first.
+func claudeSettingsCandidates(workingDir string) []string {
 	var candidates []string
 	if dir := strings.TrimSpace(workingDir); dir != "" {
 		candidates = append(candidates,
@@ -369,34 +440,35 @@ func claudeCodeResolvedModel(workingDir string, env map[string]string) string {
 	if home, err := os.UserHomeDir(); err == nil {
 		candidates = append(candidates, filepath.Join(home, ".claude", "settings.json"))
 	}
-	for _, candidate := range candidates {
-		if configured := claudeCodeSettingsModel(candidate); configured != "" {
-			return configured
-		}
-	}
-	return ""
+	return candidates
 }
 
-// claudeCodeSettingsModel reads one settings file's "model". An unreadable or
-// malformed file is not an error worth surfacing: the picker degrades to no
-// default, exactly as if the key were absent.
-func claudeCodeSettingsModel(path string) string {
+// claudeSettings is the subset of a Claude Code settings file AO reads: the
+// selected model and the environment block that can remap the aliases.
+type claudeSettings struct {
+	Model string            `json:"model"`
+	Env   map[string]string `json:"env"`
+}
+
+// readClaudeSettings reads one settings file. An unreadable or malformed file is
+// not an error worth surfacing: the picker degrades to the values other scopes
+// provide, exactly as if the keys were absent.
+func readClaudeSettings(path string) claudeSettings {
 	file, err := os.Open(path) //nolint:gosec // path is derived from the project dir and the user's home
 	if err != nil {
-		return ""
+		return claudeSettings{}
 	}
 	defer func() { _ = file.Close() }()
 	raw, err := io.ReadAll(io.LimitReader(file, claudeCodeSettingsReadLimit))
 	if err != nil {
-		return ""
+		return claudeSettings{}
 	}
-	var settings struct {
-		Model string `json:"model"`
-	}
+	var settings claudeSettings
 	if err := json.Unmarshal(raw, &settings); err != nil {
-		return ""
+		return claudeSettings{}
 	}
-	return strings.TrimSpace(settings.Model)
+	settings.Model = strings.TrimSpace(settings.Model)
+	return settings
 }
 
 func hasDiscoverySource(agentID string) bool {
@@ -503,7 +575,16 @@ func CatalogFingerprint(ctx context.Context, agentID, binary, workingDir string,
 // or "" when the catalog depends on the binary alone.
 func discoveryConfigInputs(agentID, workingDir string, env map[string]string) string {
 	if agentID == "claude-code" {
-		return "model=" + claudeCodeResolvedModel(workingDir, env)
+		config := resolveClaudeModelConfig(workingDir, env)
+		// Alias overrides change which rows the picker offers, so they have to
+		// be part of the fingerprint or an edited gateway mapping would never
+		// invalidate the cached catalog.
+		parts := make([]string, 0, len(claudeAliasDefaults)+1)
+		parts = append(parts, "model="+config.configured)
+		for _, entry := range claudeAliasDefaults {
+			parts = append(parts, entry.envKey+"="+config.aliases[entry.envKey])
+		}
+		return strings.Join(parts, ";")
 	}
 	if config := configDiscoveryFingerprint(agentID, workingDir, env); config != "" {
 		return "config=" + config
