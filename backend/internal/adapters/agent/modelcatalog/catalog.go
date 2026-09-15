@@ -185,7 +185,8 @@ func claudeCodeModels() []ports.AgentModelInfo {
 // what the alias routes to, plus the id AO keeps selectable when no override is
 // present. The fallback ids are the Z.ai / metrica Claude Code gateway models
 // (Opus -> glm-5.3, Sonnet -> glm-5.3-flash); the gateway base URL and
-// credentials stay in Claude Code's own settings and are never read here.
+// credentials stay in Claude Code's own settings and are never read here. See
+// docs/harnesses/claude-code-glm.md and https://docs.z.ai/devpack/tool/claude.
 var claudeAliasDefaults = []struct {
 	alias    string
 	envKey   string

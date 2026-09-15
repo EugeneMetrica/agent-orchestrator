@@ -1,17 +1,46 @@
 # Claude Code with GLM models (Z.ai / metrica gateway)
 
 Claude Code can be pointed at an Anthropic-compatible gateway that serves GLM
-models instead of Anthropic ones. The
-[Z.ai Claude Code integration](https://docs.z.ai/scenario-example/develop-tools/claude)
-does this by setting `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, and the
-`ANTHROPIC_DEFAULT_*_MODEL` variables, so each Claude alias routes to a GLM
-model. The metrica setup follows that pattern:
+models instead of Anthropic ones. The canonical operator reference is Z.ai's
+[Claude Code + GLM Coding Plan guide](https://docs.z.ai/devpack/tool/claude):
+it configures the gateway through the `env` block of `~/.claude/settings.json`,
+so each Claude alias routes to a GLM model.
 
-| Claude Code alias | Environment variable             | Model           |
-| ----------------- | -------------------------------- | --------------- |
-| Opus              | `ANTHROPIC_DEFAULT_OPUS_MODEL`   | `glm-5.3`       |
-| Sonnet            | `ANTHROPIC_DEFAULT_SONNET_MODEL` | `glm-5.3-flash` |
-| Haiku             | `ANTHROPIC_DEFAULT_HAIKU_MODEL`  | `glm-4.6v-flash`|
+## Operator setup (Claude Code's own settings)
+
+Per the Z.ai guide, `~/.claude/settings.json`:
+
+```json
+{
+  "env": {
+    "ANTHROPIC_AUTH_TOKEN": "your_api_key",
+    "ANTHROPIC_BASE_URL": "https://api.z.ai/api/anthropic",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "glm-5.3",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-5.3-flash",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-4.6v-flash",
+    "API_TIMEOUT_MS": "3000000"
+  }
+}
+```
+
+On this stack the base URL is the metrica gateway (`https://ai.metrica.pro`)
+instead of `https://api.z.ai/api/anthropic`; everything else is the same
+pattern. The standing metrica alias map is:
+
+| Claude Code alias | Environment variable             | Model            |
+| ----------------- | -------------------------------- | ---------------- |
+| Opus              | `ANTHROPIC_DEFAULT_OPUS_MODEL`   | `glm-5.3`        |
+| Sonnet            | `ANTHROPIC_DEFAULT_SONNET_MODEL` | `glm-5.3-flash`  |
+| Haiku             | `ANTHROPIC_DEFAULT_HAIKU_MODEL`  | `glm-4.6v-flash` |
+
+Z.ai's own defaults point every alias at GLM-5.3-Flash, and its manual-config
+example uses the long-context ids `glm-5.3[1m]` / `glm-5.3-flash[1m]`. Whatever
+the gateway serves, the ids AO offers follow these variables (see below), and
+any other id can still be typed into the picker.
+
+Claude Code reads `settings.json` at startup, so a changed mapping needs a fresh
+Claude Code process — for AO that means a new session, not a reload of an
+existing one.
 
 ## How this shows up in the AO picker
 
@@ -52,7 +81,9 @@ daemon process environment, `<project>/.claude/settings.local.json`,
 `env` block of each settings file, which is where the Z.ai pattern puts the
 variables. When an alias has no override, `glm-5.3` and `glm-5.3-flash` stay
 listed as the documented gateway defaults; Haiku is listed only when its
-override is set.
+override is set. AO surfaces only the ids the variables name, so an operator who
+follows Z.ai's long-context example gets `glm-5.3[1m]` and `glm-5.3-flash[1m]`
+rows instead; AO does not guess variants the gateway may not serve.
 
 The selected id is forwarded verbatim as the ACP `model` session option, so a
 Chat session started on `glm-5.3` runs on `glm-5.3`. Free-text entry
