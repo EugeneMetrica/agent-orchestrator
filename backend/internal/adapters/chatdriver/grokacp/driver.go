@@ -63,7 +63,15 @@ func sessionMeta(cfg acpdriver.LaunchConfig) map[string]any {
 
 // sessionMode maps AO's approval vocabulary onto Grok's own mode ids, which are
 // the same strings the TUI adapter passes to `--permission-mode`. Empty leaves
-// the user's ~/.grok config default in place.
+// the user's ~/.grok config default in place. bypass-permissions is the one mode
+// that is expressed twice: this session mode plus the launch-time
+// `--always-approve` from configure, because the flag is what suppresses Grok's
+// approval UI for tools the session mode alone would still route through it.
+//
+//	default            -> ""                   (Grok prompts for approvals)
+//	accept-edits       -> "acceptEdits"        (file edits auto-approve)
+//	auto               -> "auto"               (all tools auto-approve)
+//	bypass-permissions -> "bypassPermissions"  (+ --always-approve)
 func sessionMode(permissions ports.PermissionMode) string {
 	switch ports.NormalizePermissionMode(permissions) {
 	case ports.PermissionModeAcceptEdits:
