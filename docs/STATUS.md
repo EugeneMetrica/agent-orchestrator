@@ -136,8 +136,11 @@ surface (`npm run sqlc`, `npm run api`).
   `auth.json`, `config.toml`); AO never bundles or downloads the CLI.
 - **Standing instructions**: delivered through ACP session `_meta.rules`, which
   Grok appends to its own system prompt rather than replacing it.
+- **Resume**: a terminated session reopens from its stored provider conversation
+  id; Grok recovers the transcript and AO re-delivers `_meta.rules`.
 - **Live test**: `AO_LIVE_GROK_ACP=1 go test ./internal/adapters/chatdriver/grokacp/...`
-  (skipped unless the gate is set; it spends real Grok account usage).
+  (skipped unless the gate is set; it spends real Grok account usage). Covers the
+  session smoke, the permission-mode matrix, and terminate/resume.
 
 ### Frontend (Electron + React)
 

@@ -53,6 +53,13 @@ func configure(_ context.Context, cfg acpdriver.LaunchConfig) ([]string, map[str
 // appended to — never a replacement for — what the user's installation
 // configures. The shared transport repeats this metadata on session/load and
 // session/resume, so a recovered conversation keeps the same standing context.
+//
+// Resume therefore needs no extension to nativeacp or a Grok-specific ACP
+// transport: `rules` is the only `_meta` field AO sends. Grok's other documented
+// extension, `_meta.yoloMode`, stays unused because AO already expresses
+// bypass-permissions through the `bypassPermissions` session mode plus the
+// launch-time `--always-approve` flag, and duplicating it in metadata would give
+// the session a second, silent way to widen the user's approvals.
 func sessionMeta(cfg acpdriver.LaunchConfig) map[string]any {
 	prompt := strings.TrimSpace(cfg.SystemPrompt)
 	if prompt == "" {

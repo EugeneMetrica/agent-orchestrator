@@ -68,6 +68,88 @@ func TestLiveGrokACP(t *testing.T) {
 	}
 }
 
+// A Grok Chat session has to survive the host process it was started in: the
+// daemon restarts, AO reopens the conversation from the stored provider id, and
+// the user expects both the transcript and the workspace to still be there.
+// This asserts that end to end against the real provider — history recovered by
+// Grok itself, standing instructions re-delivered by AO as process input, and
+// the file the first session wrote still untouched on disk.
+func TestLiveGrokACPResume(t *testing.T) {
+	if os.Getenv("AO_LIVE_GROK_ACP") != "1" {
+		t.Skip("set AO_LIVE_GROK_ACP=1 to run against the local Grok account")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	workspace := t.TempDir()
+	dataDir := liveDataDir(t)
+	driver := New(grok.New(), nil)
+
+	conv, err := driver.Start(ctx, ports.ChatStartConfig{
+		SessionID: "live-grok-resume", DataDir: dataDir, WorkspacePath: workspace,
+		Env: liveEnvMap(), Permissions: ports.PermissionModeDefault,
+		SystemPrompt: "On every response include the exact token GROK_STANDING_START.",
+	})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	providerID := conv.ProviderConversationID()
+	if providerID == "" {
+		t.Fatalf("provider conversation id = %q, want non-empty", providerID)
+	}
+	if !conv.Capabilities()[ports.ChatCapabilityResume] {
+		t.Fatalf("capabilities = %#v, want resume", conv.Capabilities())
+	}
+
+	ref := sendLiveTurn(ctx, t, conv,
+		"Use the shell to run `printf before-value > before.txt`, remember the codeword ALPHA, then report success.")
+	startAnswer := waitForLiveTurn(ctx, t, conv, ref.ProviderTurnID, true)
+	if !strings.Contains(startAnswer, "GROK_STANDING_START") {
+		t.Fatalf("start answer omitted the standing instruction token: %q", startAnswer)
+	}
+	beforeContent, err := os.ReadFile(filepath.Join(workspace, "before.txt"))
+	if err != nil || string(beforeContent) != "before-value" {
+		t.Fatalf("tool-created before.txt = %q, %v", beforeContent, err)
+	}
+
+	if err := conv.(ports.ChatProviderTerminator).Terminate(); err != nil {
+		t.Fatalf("Terminate: %v", err)
+	}
+
+	// A different standing token on resume separates the two deliveries: only a
+	// re-sent _meta.rules can produce GROK_STANDING_RESUME, while ALPHA can only
+	// come from the transcript Grok recovered for this provider id.
+	resumed, err := driver.Resume(ctx, ports.ChatResumeConfig{
+		SessionID: "live-grok-resume", ProviderConversationID: providerID,
+		DataDir: dataDir, WorkspacePath: workspace, Env: liveEnvMap(),
+		Permissions:  ports.PermissionModeDefault,
+		SystemPrompt: "On every response include the exact token GROK_STANDING_RESUME.",
+	})
+	if err != nil {
+		t.Fatalf("Resume: %v", err)
+	}
+	defer resumed.(ports.ChatProviderTerminator).Terminate()
+
+	resumeRef := sendLiveTurn(ctx, t, resumed,
+		"What codeword did I tell you earlier? Also confirm whether before.txt exists. Do not modify any files.")
+	resumeAnswer := waitForLiveTurn(ctx, t, resumed, resumeRef.ProviderTurnID, true)
+	if !strings.Contains(resumeAnswer, "ALPHA") {
+		t.Fatalf("resumed answer lost the pre-terminate history: %q", resumeAnswer)
+	}
+	if !strings.Contains(resumeAnswer, "GROK_STANDING_RESUME") {
+		t.Fatalf("resumed answer omitted the re-delivered standing token: %q", resumeAnswer)
+	}
+	if !strings.Contains(resumeAnswer, "before.txt") {
+		t.Fatalf("resumed answer did not reference the workspace file: %q", resumeAnswer)
+	}
+
+	afterContent, err := os.ReadFile(filepath.Join(workspace, "before.txt"))
+	if err != nil || string(afterContent) != string(beforeContent) {
+		t.Fatalf("before.txt changed across resume: before=%q after=%q, %v",
+			beforeContent, afterContent, err)
+	}
+}
+
 // Every AO permission mode must at least open and complete a native Grok ACP
 // turn. TestSessionModeUsesGrokPermissionModeIDs asserts the exact mode ids and
 // launch flags; this live matrix catches provider-side drift in how Grok honours
