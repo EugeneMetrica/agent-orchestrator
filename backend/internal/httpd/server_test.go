@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -225,14 +226,9 @@ func TestServerRunWithReadyPublishesBeforeCallback(t *testing.T) {
 func TestServerShutdownEndpoint(t *testing.T) {
 	runPath := filepath.Join(t.TempDir(), "running.json")
 	cfg := config.Config{
-		Host: "127.0.0.1",
-		Port: 0,
-		// Generous relative to the work the drain actually does: POST /shutdown
-		// fires the request from inside its own handler, so Shutdown always
-		// waits for that connection to go idle. Under -race on a loaded CI
-		// runner that drain has overshot a 5s budget, making Run return
-		// "graceful shutdown exceeded 5s" and flaking the test.
-		ShutdownTimeout: 30 * time.Second,
+		Host:            "127.0.0.1",
+		Port:            0,
+		ShutdownTimeout: 5 * time.Second,
 		RunFilePath:     runPath,
 	}
 
@@ -261,13 +257,75 @@ func TestServerShutdownEndpoint(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Run returned error on shutdown endpoint: %v", err)
 		}
-	case <-time.After(cfg.ShutdownTimeout + 15*time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("Run did not return after shutdown endpoint")
 	}
 
 	if after, _ := runfile.Read(runPath); after != nil {
 		t.Error("run-file still present after shutdown endpoint; want it removed")
 	}
+}
+
+// TestServerShutdownDropsNeverUsedConnections pins the drain rule that keeps an
+// intentional shutdown prompt: a connection that was accepted but never sent a
+// request must not hold graceful shutdown open. net/http counts such a
+// connection as busy for its first five seconds, and http.Transport leaves one
+// behind whenever a speculative dial loses the race to a pooled connection, so
+// without the sweep the daemon burns the whole ShutdownTimeout and reports a
+// timeout error for a shutdown that had nothing left to drain.
+func TestServerShutdownDropsNeverUsedConnections(t *testing.T) {
+	cfg := config.Config{
+		Host:            "127.0.0.1",
+		Port:            0,
+		ShutdownTimeout: 5 * time.Second,
+		RunFilePath:     filepath.Join(t.TempDir(), "running.json"),
+	}
+
+	srv, err := NewWithDeps(cfg, discardLogger(), nil, APIDeps{})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	runErr := make(chan error, 1)
+	go func() { runErr <- srv.Run(context.Background()) }()
+	waitForHealth(t, "http://"+srv.Addr().String())
+
+	idle, err := net.Dial("tcp", srv.Addr().String())
+	if err != nil {
+		t.Fatalf("dial idle connection: %v", err)
+	}
+	defer idle.Close()
+	waitForNeverUsedConn(t, srv)
+
+	srv.RequestShutdown()
+
+	// Well under net/http's five-second grace for a never-used connection, so
+	// a regression shows up as a timeout here rather than as a slow pass.
+	select {
+	case err := <-runErr:
+		if err != nil {
+			t.Fatalf("Run returned error with a never-used connection open: %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("Run did not return promptly; a never-used connection is holding graceful shutdown open")
+	}
+}
+
+// waitForNeverUsedConn blocks until the server has accepted a connection that
+// has not carried a request, so the shutdown under test actually faces one.
+func waitForNeverUsedConn(t *testing.T, srv *Server) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		srv.connMu.Lock()
+		accepted := len(srv.neverUsedConn)
+		srv.connMu.Unlock()
+		if accepted > 0 {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("server never accepted the idle connection")
 }
 
 func waitForHealth(t *testing.T, base string) {

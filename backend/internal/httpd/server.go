@@ -27,6 +27,9 @@ type Server struct {
 
 	shutdownRequested chan struct{}
 	shutdownOnce      sync.Once
+
+	connMu        sync.Mutex
+	neverUsedConn map[net.Conn]struct{}
 }
 
 // NewWithDeps constructs a Server with API dependencies supplied by the daemon
@@ -63,6 +66,7 @@ func NewWithDeps(cfg config.Config, log *slog.Logger, termMgr *terminal.Manager,
 		log:               log,
 		listen:            ln,
 		shutdownRequested: make(chan struct{}),
+		neverUsedConn:     make(map[net.Conn]struct{}),
 	}
 	srv.http = &http.Server{
 		Handler: NewRouterWithControl(cfg, log, termMgr, deps, ControlDeps{
@@ -72,6 +76,7 @@ func NewWithDeps(cfg config.Config, log *slog.Logger, termMgr *terminal.Manager,
 		// ReadHeaderTimeout guards against slow-loris even on loopback;
 		// per-request body/handler timeouts are applied per-surface.
 		ReadHeaderTimeout: 10 * time.Second,
+		ConnState:         srv.trackConnState,
 	}
 	return srv, nil
 }
@@ -145,6 +150,8 @@ func (s *Server) run(ctx context.Context, onReady func()) error {
 		s.log.Info("shutdown signal received, draining connections", "timeout", s.cfg.ShutdownTimeout)
 	}
 
+	s.closeNeverUsedConns()
+
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), s.cfg.ShutdownTimeout)
 	defer cancel()
 
@@ -157,6 +164,41 @@ func (s *Server) run(ctx context.Context, onReady func()) error {
 
 	s.log.Info("daemon stopped cleanly")
 	return <-serveErr
+}
+
+// trackConnState records connections that have been accepted but have not yet
+// carried a request, so shutdown can tell them apart from connections that are
+// actually draining work.
+func (s *Server) trackConnState(conn net.Conn, state http.ConnState) {
+	s.connMu.Lock()
+	defer s.connMu.Unlock()
+	if state == http.StateNew {
+		s.neverUsedConn[conn] = struct{}{}
+		return
+	}
+	delete(s.neverUsedConn, conn)
+}
+
+// closeNeverUsedConns drops the connections that were accepted but never sent a
+// request. net/http counts such a connection as busy for its first five seconds
+// (golang/go#22682), so one of them stalls Shutdown for the whole
+// ShutdownTimeout even though it carries no in-flight work. They are routine:
+// when an http.Transport's speculative dial loses the race to a pooled
+// connection, the dialed socket lands in the client's idle pool without ever
+// being written to. Only connections still unused when shutdown was requested
+// are closed; anything already serving a request keeps its normal drain.
+func (s *Server) closeNeverUsedConns() {
+	s.connMu.Lock()
+	conns := make([]net.Conn, 0, len(s.neverUsedConn))
+	for conn := range s.neverUsedConn {
+		conns = append(conns, conn)
+	}
+	clear(s.neverUsedConn)
+	s.connMu.Unlock()
+
+	for _, conn := range conns {
+		_ = conn.Close()
+	}
 }
 
 func (s *Server) boundPort() int {
