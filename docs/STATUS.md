@@ -44,7 +44,7 @@ surface (`npm run sqlc`, `npm run api`).
   conversation between TUI and Chat without changing the AO session/worktree;
   rollback, restart recovery, controller-generation fencing, and a transition
   message outbox preserve the one-controller invariant.
-- Codex and all eight registered ACP Chat providers are
+- Codex and all nine registered ACP Chat providers are
   owned by authenticated, detached
   per-session hosts. Desktop close, full quit, and updater daemon replacement
   detach and reconnect without relaunching the provider or interrupting an
@@ -57,7 +57,8 @@ surface (`npm run sqlc`, `npm run api`).
   load/resume remains the repair path after actual host failure; it is not needed
   for live adoption. Installation changes and launch-only credentials do not
   block adoption. Updater warnings use actual controller ownership rather than
-  a provider allowlist. Shared process tests cover all eight ACP identities;
+  a provider allowlist. Shared process tests cover eight of the nine ACP
+  identities (Grok's detached-host coverage is still pending);
   authenticated vendor and platform coverage is tracked separately in
   [the research/evidence note](research/persistent-acp-chat-hosts.md).
 - Durable Chat conversations with project-scoped orchestrator continuity,
@@ -65,7 +66,7 @@ surface (`npm run sqlc`, `npm run api`).
   archive/projection, controller-generation fencing, turns, messages,
   activities, approvals, structured input, usage, compaction, and rollback.
 - Chat drivers for the user's installed Codex (native app-server), Claude Code
-  (claude-agent-acp), Cursor, OpenCode, Droid, Kimchi, Kimi, Pi, and OMP. OMP Chat uses
+  (claude-agent-acp), Cursor, OpenCode, Droid, Kimchi, Kimi, Pi, OMP, and Grok. OMP Chat uses
   native `omp acp` and requires OMP 15.0.0 or newer. Pi's independently
   installed pi-acp adapter does not enforce approval modes, so AO admits Pi Chat
   only after the user explicitly chooses the per-session bypass-permissions
@@ -126,6 +127,17 @@ surface (`npm run sqlc`, `npm run api`).
   accounts; external Codex clients are not controlled.
 - OpenAPI spec generated from Go DTOs; frontend TS types generated from it and
   drift-checked in CI.
+
+#### Grok (xAI Grok Build)
+
+- **Status**: Chat mode available.
+- **Transport**: native ACP via `grok --no-auto-update agent stdio`.
+- **Auth**: the user's existing `~/.grok` credentials (`XAI_API_KEY`,
+  `auth.json`, `config.toml`); AO never bundles or downloads the CLI.
+- **Standing instructions**: delivered through ACP session `_meta.rules`, which
+  Grok appends to its own system prompt rather than replacing it.
+- **Live test**: `AO_LIVE_GROK_ACP=1 go test ./internal/adapters/chatdriver/grokacp/...`
+  (skipped unless the gate is set; it spends real Grok account usage).
 
 ### Frontend (Electron + React)
 
