@@ -151,6 +151,18 @@ surface (`npm run sqlc`, `npm run api`).
   (`backend/e2e/chat_grok_test.go`). The same model-override and attachment
   scenarios run against Claude Code as a parity reference under
   `AO_LIVE_CLAUDE_ACP=1`.
+- **Playwright UI E2E**: `AO_LIVE_GROK_ACP=1 AO_E2E_LIVE_PROJECT=<projectId>
+  npx playwright test chat-grok-e2e` drives the surfaces a user operates —
+  harness selection in the new-task dialog, the composer's model and
+  reasoning-effort menus, an attachment uploaded through the file picker, the
+  timeline's tool rows, and the workspace panel — against a real daemon, then
+  asserts the outcome on server state and the worktree rather than on the UI
+  label alone (`frontend/e2e/chat-grok-e2e.spec.ts`). The critical scenarios run
+  against Claude Code as a parity reference under `AO_LIVE_CLAUDE_ACP=1` with
+  `CLAUDE_ROUTER_URL=https://ai.metrica.pro/v1`
+  (`frontend/e2e/chat-reference-e2e.spec.ts`). Both are skipped, with the missing
+  prerequisite as the reason, on an ungated `npx playwright test`; the bootstrap
+  they need is documented in `frontend/e2e/support/live-daemon.ts`.
 
 ### Frontend (Electron + React)
 
